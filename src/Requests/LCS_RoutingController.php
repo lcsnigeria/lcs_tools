@@ -50,11 +50,52 @@ class LCS_RoutingController extends LCS_Request
     /**
      * Initializes the routing controller and sets the object ID if provided.
      */
-    public function __construct()
+    public function __construct( bool $throwErrors = false )
     {
+        parent::__construct( $throwErrors );
+        
         if ($this->object_id) {
             $this->set_request_var('object_id', $this->object_id);
         }
+    }
+
+    /**
+     * Checks if the given file path is a PHP file.
+     *
+     * @param string $file_path The file path to check.
+     * @return bool True if the file is a PHP file, false otherwise.
+     */
+    public function is_file_php(string $file_path): bool
+    {
+        return preg_match('/\.(php|PHP)$/i', $file_path);
+    }
+
+    /**
+     * Checks if the given file path is an HTML file.
+     *
+     * @param string $file_path The file path to check.
+     * @return bool True if the file is an HTML file, false otherwise.
+     */
+    public function is_file_html(string $file_path): bool
+    {
+        return preg_match('/\.(html|HTML)$/i', $file_path);
+    }
+
+    /**
+     * Checks if the given file path is a valid template file.
+     *
+     * A valid template file is either a PHP or HTML file.
+     *
+     * @param string $file_path The file path to check.
+     * @param bool $validateFileExistence Whether to validate the file existence.
+     * @return bool True if the file is a valid template file, false otherwise.
+     */
+    public function is_valid_template_file(string $file_path, bool $validateFileExistence = false): bool
+    {
+        if ($validateFileExistence) {
+            return file_exists($file_path) && ($this->is_file_php($file_path) || $this->is_file_html($file_path));
+        }
+        return $this->is_file_php($file_path) || $this->is_file_html($file_path);
     }
 
     /**
@@ -97,7 +138,7 @@ class LCS_RoutingController extends LCS_Request
         if ($this->template_dir) {
             $temp_dir = $this->template_dir;
             $temp_dir_files = array_values(array_filter(scandir($temp_dir), function ($file) use ($temp_dir) {
-                return is_file("$temp_dir/$file") && preg_match('/\.(php|html|PHP|HTML)$/i', $file);
+                return is_file("$temp_dir/$file") && $this->is_valid_template_file($file);
             }));
 
             if (!empty($temp_dir_files)) {
@@ -120,7 +161,7 @@ class LCS_RoutingController extends LCS_Request
 
         // Validate that all required templates exist
         foreach ($template_paths as $key => $value) {
-            if ($value && !file_exists($value)) {
+            if (!empty($value) && !file_exists($value)) {
                 $this->throw_error("The template file '$value' for '$key' does not exist.");
             }
         }

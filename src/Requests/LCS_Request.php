@@ -10,7 +10,7 @@ use LCSNG_EXT\Creds\LCS_Creds;
 class LCS_Request
 {
     /** @var bool Whether to report errors as exceptions */
-    public $reportErrors;
+    public $throwErrors;
 
     /** @var string Holding the nonce secret key */
     private $nonce_secret_key;
@@ -21,11 +21,11 @@ class LCS_Request
     /**
      * Constructor for initializing error reporting.
      *
-     * @param bool $reportErrors Whether to throw exceptions on errors.
+     * @param bool $throwErrors Whether to throw exceptions on errors.
      */
-    public function __construct(bool $reportErrors = false)
+    public function __construct(bool $throwErrors = false)
     {
-        $this->reportErrors = $reportErrors;
+        $this->throwErrors = $throwErrors;
 
         $creds = new LCS_Creds();
         $this->nonce_secret_key = $creds->get_nonce_secret_key();
@@ -751,7 +751,7 @@ class LCS_Request
      */
     public function throw_error(string $message)
     {
-        if ($this->reportErrors) {
+        if ($this->throwErrors) {
             throw new \Exception($message);
         }
     }
