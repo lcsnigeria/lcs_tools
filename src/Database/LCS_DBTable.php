@@ -49,23 +49,43 @@ class LCS_DBTable extends LCS_DBManager
     }
 
     /**
-     * Prepares the instance to create a new table.
+     * Initializes the instance to create a new table.
      *
+     * Optionally sets the table name. If a prefix is defined and not present 
+     * in the provided table name, it automatically prepends the prefix.
+     *
+     * @param string|null $table_name Optional. The name of the table to create.
      * @return $this
      */
-    public function new_table()
+    public function new_table($table_name = null)
     {
+        if ($table_name) {
+            $this->table_name = $table_name;
+            if ($this->prefix && strpos($table_name, $this->prefix) === false) {
+                $this->table_name = $this->prefix . $table_name;
+            }
+        }
         $this->creating_table = true;
         return $this;
     }
 
     /**
-     * Prepares the instance to alter an existing table.
+     * Initializes the instance to alter an existing table.
      *
+     * Optionally sets the table name. If a prefix is defined and not present 
+     * in the provided table name, it automatically prepends the prefix.
+     *
+     * @param string|null $table_name Optional. The name of the table to alter.
      * @return $this
      */
-    public function alter_table()
+    public function alter_table($table_name = null)
     {
+        if ($table_name) {
+            $this->table_name = $table_name;
+            if ($this->prefix && strpos($table_name, $this->prefix) === false) {
+                $this->table_name = $this->prefix . $table_name;
+            }
+        }
         $this->altering_table = true;
         return $this;
     }
@@ -76,7 +96,7 @@ class LCS_DBTable extends LCS_DBManager
      * @return string The full table name with prefix.
      * @throws \Exception If table name is invalid.
      */
-    public function full_table_name() {
+    public function get_full_table_name() {
         $table_name = $this->table_name;
         if ($this->prefix && strpos($table_name, $this->prefix) === false) {
             $table_name = $this->prefix . $table_name;
