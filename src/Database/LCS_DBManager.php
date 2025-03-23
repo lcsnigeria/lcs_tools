@@ -56,6 +56,9 @@ class LCS_DBManager {
     /** @var string $charset Character set for the connection (default: utf8mb4). */
     private $charset = 'utf8mb4';
 
+    /** @var string $collate Collation for the connection (default: utf8mb4_general_ci). */
+    private $collate = 'utf8mb4_general_ci';
+
     /** @var string|null $dsn Constructed DSN string for PDO. */
     private $dsn;
 
@@ -367,8 +370,8 @@ class LCS_DBManager {
      */
     public function get_charset_collate() {
         // Default to utf8mb4 charset and collation
-        $default_charset = 'utf8mb4';
-        $default_collation = 'utf8mb4_general_ci';
+        $default_charset = $this->charset;
+        $default_collation = $this->collate;
 
         // If auto_charset is disabled, return the default settings
         if (!$this->auto_charset) {

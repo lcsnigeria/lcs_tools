@@ -6,6 +6,9 @@ use LCSNG_EXT\Database\LCS_DBManager;
 class LCS_DBTable extends LCS_DBManager 
 {
 
+    /** @var string|null The table prefix. */
+    public $prefix = null;
+
     /** @var bool Flag to indicate if a table is being created. */
     private $creating_table = false;
 
@@ -59,13 +62,10 @@ class LCS_DBTable extends LCS_DBManager
      */
     public function new_table($table_name = null)
     {
-        if ($table_name) {
-            $this->table_name = $table_name;
-            if ($this->prefix && strpos($table_name, $this->prefix) === false) {
-                $this->table_name = $this->prefix . $table_name;
-            }
-        }
         $this->creating_table = true;
+        if ($table_name) {
+            $this->set_table_name($table_name);
+        }
         return $this;
     }
 
@@ -121,6 +121,14 @@ class LCS_DBTable extends LCS_DBManager
             throw new \Exception("Table name must be a non-empty string.");
         }
         $this->table_name = trim($table_name);
+        if ($this->prefix && strpos($table_name, $this->prefix) === false) {
+            $this->table_name = $this->prefix . $table_name;
+        }
+
+        // Check if table exists and throw exception if yes
+        if ($this->is_table_exist($this->table_name)) {
+            throw new \Exception("Table already exists: " . $this->table_name);
+        }
     }
 
     /**
@@ -132,7 +140,7 @@ class LCS_DBTable extends LCS_DBManager
      */
     public function is_table_has_primary_key($table_name = null)
     {
-        $table_name = $table_name ?? $this->full_table_name();
+        $table_name = $table_name ?? $this->get_full_table_name();
 
         // Check if table exist and throw exception if not
         if (!$this->is_table_exist($table_name)) {
@@ -153,7 +161,7 @@ class LCS_DBTable extends LCS_DBManager
      */
     public function is_table_has_auto_increment($table_name = null)
     {
-        $table_name = $table_name ?? $this->full_table_name();
+        $table_name = $table_name ?? $this->get_full_table_name();
 
         // Check if table exists and throw exception if not
         if (!$this->is_table_exist($table_name)) {
@@ -230,7 +238,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param array $field_data Associative array of field properties:
      *                          - name (string)        : Column name.
      *                          - data_type (string)   : SQL data type (e.g., INT, VARCHAR).
-     *                          - precision (int|null) : Length/precision for applicable types.
+     *                          - precision (int|null|array) : Length/precision for applicable types.
      *                          - modifier (string)    : Optional SQL modifier (e.g., UNSIGNED).
      *                          - default (mixed)      : Default value for the field.
      *                          - unique (bool)        : Whether the field should be UNIQUE.
@@ -256,8 +264,8 @@ class LCS_DBTable extends LCS_DBManager
             throw new \Exception("Invalid or missing field name.");
         }
         $name = trim($field_data['name']);
-        if ($this->altering_table && $this->is_table_column_exist($this->full_table_name(), $name)) {
-            throw new \Exception("Column with name '$name' already exists in the DB table '" . $this->full_table_name() . "'.");
+        if ($this->altering_table && $this->is_table_column_exist($this->get_full_table_name(), $name)) {
+            throw new \Exception("Column with name '$name' already exists in the DB table '" . $this->get_full_table_name() . "'.");
         }
 
         // Check if primary key is being set and prevent duplicate primary keys
@@ -287,9 +295,15 @@ class LCS_DBTable extends LCS_DBManager
         $length_sql = '';
         if (in_array($dataType, ['VARCHAR', 'CHAR', 'DECIMAL', 'FLOAT', 'DOUBLE'])) {
             if (empty($field_data['length_or_precision']) || !is_numeric($field_data['length_or_precision']) || intval($field_data['length_or_precision']) <= 0) {
-                throw new \Exception("$dataType requires a valid length/precision.");
+            throw new \Exception("$dataType requires a valid length/precision.");
             }
             $length_sql = "(".intval($field_data['length_or_precision']).")";
+        } elseif (in_array($dataType, ['ENUM', 'SET'])) {
+            if (empty($field_data['length_or_precision']) || !is_array($field_data['length_or_precision']) || count($field_data['length_or_precision']) === 0) {
+            throw new \Exception("$dataType requires an array of valid values.");
+            }
+            $escaped_values = array_map(fn($value) => "'" . addslashes($value) . "'", $field_data['length_or_precision']);
+            $length_sql = "(".implode(", ", $escaped_values).")";
         }
 
         // Handle optional attributes (e.g., UNSIGNED)
@@ -370,7 +384,7 @@ class LCS_DBTable extends LCS_DBManager
      *
      * @param string      $name              The name of the field.
      * @param string      $dataType          The data type of the field (e.g., VARCHAR, INT, DECIMAL).
-     * @param int|string  $length_or_precision  The length (for VARCHAR) or precision (for DECIMAL).
+     * @param int|string|array  $length_or_precision  The length (for VARCHAR) or precision/options (for DECIMAL/ENUM/SET).
      * @param mixed       $default           Default value for the field.
      * @param bool        $unique            Whether the field should be unique.
      * @param bool        $primary_key       Whether this field is the primary key.
@@ -415,7 +429,7 @@ class LCS_DBTable extends LCS_DBManager
         }
 
         if ($this->altering_table) {
-            if (!$this->is_table_exist($this->full_table_name())) {
+            if (!$this->is_table_exist($this->get_full_table_name())) {
                 throw new \Exception("Table does not exist.");
             }
 
@@ -433,8 +447,19 @@ class LCS_DBTable extends LCS_DBManager
 
             // Handle primary key
             if ($primary_key) {
-                $this->id = "`$name` $dataType($length_or_precision) PRIMARY KEY";
-                return true;
+                // Throw an error if data type is ENUM or SET
+                if (in_array(strtoupper($dataType), ['ENUM', 'SET'])) {
+                    throw new \Exception("ENUM and SET data types are not allowed for primary keys.");
+                }
+
+                // If data type is of integer, then discard $length_or_precision
+                if ($this->is_data_type_integer($dataType)) {
+                    $this->id = "`$name` $dataType PRIMARY KEY";
+                    return true;
+                } else {
+                    $this->id = "`$name` $dataType($length_or_precision) PRIMARY KEY";
+                    return true;
+                }
             }
         } else {
             throw new \Exception("Table state unknown: neither creating nor altering.");
@@ -454,6 +479,34 @@ class LCS_DBTable extends LCS_DBManager
 
         // Validate table creation SQL
         return $this->validate_table_field_sql($field_data);
+    }
+
+    /**
+     * Alias for add_field method.
+     *
+     * @param string      $name              The name of the field.
+     * @param string      $dataType          The data type of the field (e.g., VARCHAR, INT, DECIMAL).
+     * @param int|string|array  $length_or_precision  The length (for VARCHAR) or precision (for DECIMAL).
+     * @param mixed       $default           Default value for the field.
+     * @param bool        $unique            Whether the field should be unique.
+     * @param bool        $primary_key       Whether this field is the primary key.
+     * @param string|null $modifier          Additional SQL modifiers (e.g., UNSIGNED, ZEROFILL).
+     * @param bool        $auto_increment    Whether the field should auto-increment.
+     * 
+     * @return bool  Returns true on success, or throws an exception on failure.
+     * @throws \Exception If any validation fails.
+     */
+    public function add_column(
+        $name, 
+        $dataType = 'varchar', 
+        $length_or_precision = 255, 
+        $default = NULL, 
+        $unique = false, 
+        $primary_key = false, 
+        $modifier = NULL, 
+        $auto_increment = false
+    ) {
+        return $this->add_field($name, $dataType, $length_or_precision, $default, $unique, $primary_key, $modifier, $auto_increment);
     }
 
     /**
@@ -478,7 +531,7 @@ class LCS_DBTable extends LCS_DBManager
         }
 
         if ($this->altering_table) {
-            if (!$this->is_table_exist($this->full_table_name())) {
+            if (!$this->is_table_exist($this->get_full_table_name())) {
                 throw new \Exception("Table does not exist.");
             }
         }
@@ -553,27 +606,33 @@ class LCS_DBTable extends LCS_DBManager
     /**
      * Adds an index to the table.
      *
+     * @param array|string $columns    The column(s) to be indexed.
      * @param string       $index_type The type of index.
      * @param string       $index_name The name of the index.
-     * @param array|string $columns    The column(s) to be indexed.
      *
      * @return void
      * @throws \Exception If the index name, type, or columns are invalid.
      */
-    public function add_index(string $index_type, string $index_name, array|string $columns)
+    public function add_index(array|string $columns, string $index_type = 'INDEX', string $index_name = '')
     {
+        // Allowed index types
         $allowed_index_types = [
             'primary_key', 'unique', 'index', 'fulltext', 'spatial',
             'clustered', 'nonclustered', 'hash', 'btree', 'rtree',
             'gin', 'gist', 'brin'
         ];
 
+        // Validate index type
+        $index_type = strtolower($index_type);
         if (!in_array($index_type, $allowed_index_types)) {
             throw new \Exception("Invalid index type: $index_type. Allowed types: " . implode(', ', $allowed_index_types));
         }
 
-        if (!is_string($index_name) || trim($index_name) === '') {
-            throw new \Exception("Index name must be a non-empty string.");
+        if (trim($index_name) !== '') {
+            if (!is_string($index_name) || preg_match('/[^a-zA-Z0-9_]/', $index_name)) {
+                throw new \Exception("Index name must be a valid string.");
+            }
+            $index_name = ' ' . trim($index_name);
         }
 
         if (empty($columns)) {
@@ -609,22 +668,22 @@ class LCS_DBTable extends LCS_DBManager
                     $this->primary_key_sql = $index_sql;
                     break;
                 case 'unique':
-                    $index_sql = "UNIQUE `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "UNIQUE$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'index':
-                    $index_sql = "INDEX `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "INDEX$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'fulltext':
-                    $index_sql = "FULLTEXT `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "FULLTEXT$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'spatial':
-                    $index_sql = "SPATIAL `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "SPATIAL$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'clustered':
-                    $index_sql = "CLUSTERED `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "CLUSTERED$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'nonclustered':
-                    $index_sql = "NONCLUSTERED `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = "NONCLUSTERED$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'hash':
                 case 'btree':
@@ -632,7 +691,7 @@ class LCS_DBTable extends LCS_DBManager
                 case 'gin':
                 case 'gist':
                 case 'brin':
-                    $index_sql = strtoupper($index_type) . " `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $index_sql = strtoupper($index_type) . "$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 default:
                     throw new \Exception("Unsupported index type: $index_type.");
@@ -647,16 +706,16 @@ class LCS_DBTable extends LCS_DBManager
                     $alter_queries[] = "ADD PRIMARY KEY (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'unique':
-                    $alter_queries[] = "ADD UNIQUE INDEX `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $alter_queries[] = "ADD UNIQUE INDEX$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'index':
-                    $alter_queries[] = "ADD INDEX `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $alter_queries[] = "ADD INDEX$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'fulltext':
-                    $alter_queries[] = "ADD FULLTEXT INDEX `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $alter_queries[] = "ADD FULLTEXT INDEX$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'spatial':
-                    $alter_queries[] = "ADD SPATIAL INDEX `$index_name` (" . implode(', ', $formatted_columns) . ")";
+                    $alter_queries[] = "ADD SPATIAL INDEX$index_name (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'hash':
                 case 'btree':
@@ -664,7 +723,7 @@ class LCS_DBTable extends LCS_DBManager
                 case 'gin':
                 case 'gist':
                 case 'brin':
-                    $alter_queries[] = "ADD INDEX `$index_name` USING " . strtoupper($index_type) . " (" . implode(', ', $formatted_columns) . ")";
+                    $alter_queries[] = "ADD INDEX$index_name USING " . strtoupper($index_type) . " (" . implode(', ', $formatted_columns) . ")";
                     break;
                 case 'clustered':
                 case 'nonclustered':
@@ -727,8 +786,8 @@ class LCS_DBTable extends LCS_DBManager
             throw new \Exception("Field name must be a non-empty string.");
         }
 
-        if ($this->altering_table && $this->is_table_column_exist($this->full_table_name(), $name)) {
-            throw new \Exception("Column '$name' already exists in table '" . $this->full_table_name() . "'.");
+        if ($this->altering_table && $this->is_table_column_exist($this->get_full_table_name(), $name)) {
+            throw new \Exception("Column '$name' already exists in table '" . $this->get_full_table_name() . "'.");
         }
     }
 
@@ -834,7 +893,7 @@ class LCS_DBTable extends LCS_DBManager
         if ($this->creating_table) {
             $registered_constraint_ids = array_map('strtolower', $this->foreign_keys_sql);
         } elseif ($this->altering_table) {
-            $constraints = $this->get_table_constraints($this->full_table_name());
+            $constraints = $this->get_table_constraints($this->get_full_table_name());
             foreach ($constraints as $constraint) {
                 $registered_constraint_ids[] = strtolower($constraint['CONSTRAINT_NAME']);
             }
@@ -888,7 +947,7 @@ class LCS_DBTable extends LCS_DBManager
             }
 
             // Generate the full table name with the prefix
-            $full_table_name = $this->prefix . $this->table_name;
+            $full_table_name = $this->get_full_table_name();
 
             // Start constructing the SQL CREATE TABLE statement
             $sql = "CREATE TABLE IF NOT EXISTS `$full_table_name` (";
@@ -978,7 +1037,7 @@ class LCS_DBTable extends LCS_DBManager
             }
 
             // Get the full table name
-            $full_table_name = $this->full_table_name();
+            $full_table_name = $this->get_full_table_name();
 
             // Check if the table exists before altering it
             if (!$this->is_table_exist($full_table_name)) {
