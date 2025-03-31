@@ -1,13 +1,12 @@
 <?php
-
-namespace LCSNG_EXT\DataSanitizers;
+namespace LCSNG_EXT\DataValidation;
 
 /**
  * Class LCS_InputSanitizer
  *
  * Provides methods for sanitizing user input and preparing data for database storage.
  *
- * @package LCSNG_EXT\DataSanitizers
+ * @package LCSNG_EXT\DataValidation
  */
 class LCS_InputSanitizer
 {
@@ -17,21 +16,17 @@ class LCS_InputSanitizer
      * @param mixed $input The input value to sanitize.
      * @return mixed The sanitized input.
      */
-    public static function sanitizeInput($input)
+    public function sanitizeInput($input)
     {
         if (is_array($input)) {
-            return array_map([self::class, 'sanitizeInput'], $input);
+            return array_map([$this, 'sanitizeInput'], $input);
         }
 
         if (!is_string($input)) {
             return $input; // Return as is if it's not a string.
         }
 
-        $input = trim($input);
-        $input = stripslashes($input);
-        $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
-
-        return $input;
+        return htmlspecialchars(trim(stripslashes($input)), ENT_QUOTES, 'UTF-8');
     }
 
     /**
@@ -40,15 +35,15 @@ class LCS_InputSanitizer
      * @param mixed $data The data to sanitize (can be string, numeric, array, or object).
      * @return mixed The sanitized data, or null if unsupported type.
      */
-    public static function sanitizeDatabaseInput($data)
+    public function sanitizeDatabaseInput($data)
     {
         if (is_array($data)) {
-            return array_map([self::class, 'sanitizeDatabaseInput'], $data);
+            return array_map([$this, 'sanitizeDatabaseInput'], $data);
         }
 
         if (is_object($data)) {
             foreach ($data as $key => $value) {
-                $data->$key = self::sanitizeDatabaseInput($value);
+                $data->$key = $this->sanitizeDatabaseInput($value);
             }
             return $data;
         }
@@ -70,7 +65,7 @@ class LCS_InputSanitizer
      * @param string $email The email address to sanitize.
      * @return string|null The sanitized email address, or null if invalid.
      */
-    public static function sanitizeEmail($email)
+    public function sanitizeEmail($email)
     {
         $email = filter_var($email, FILTER_SANITIZE_EMAIL);
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
@@ -82,7 +77,7 @@ class LCS_InputSanitizer
      * @param string $string The string to sanitize.
      * @return string The sanitized string.
      */
-    public static function sanitizeString($string)
+    public function sanitizeString($string)
     {
         return htmlspecialchars($string, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
@@ -93,7 +88,7 @@ class LCS_InputSanitizer
      * @param string $url The URL to sanitize.
      * @return string|null The sanitized URL, or null if invalid.
      */
-    public static function sanitizeURL($url)
+    public function sanitizeURL($url)
     {
         $url = filter_var($url, FILTER_SANITIZE_URL);
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
@@ -105,7 +100,7 @@ class LCS_InputSanitizer
      * @param string $html The HTML content to sanitize.
      * @return string The sanitized HTML.
      */
-    public static function sanitizeHTML($html)
+    public function sanitizeHTML($html)
     {
         return htmlspecialchars($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }

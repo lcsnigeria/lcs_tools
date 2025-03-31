@@ -1,12 +1,12 @@
 <?php
-namespace LCSNG_EXT\DataSanitizers;
+namespace LCSNG_EXT\DataValidation;
 
 /**
  * Class LCS_OutputEscape
  *
  * Provides methods for escaping data retrieved from the database/app before outputting it to the user.
  *
- * @package LCSNG_EXT\DataSanitizers
+ * @package LCSNG_EXT\DataValidation
  */
 class LCS_OutputEscape
 {
@@ -16,17 +16,18 @@ class LCS_OutputEscape
      * @param mixed $data The data to escape (can be string, numeric, array, or object).
      * @return mixed The escaped data, or null if unsupported type.
      */
-    public static function escapeOutput($data)
+    public function escapeOutput($data)
     {
         if (is_array($data)) {
-            return array_map([self::class, 'escapeOutput'], $data);
+            return array_map([$this, 'escapeOutput'], $data);
         }
 
         if (is_object($data)) {
-            foreach ($data as $key => $value) {
-                $data->$key = self::escapeOutput($value);
+            $escapedObject = clone $data; // Avoid modifying original object reference
+            foreach ($escapedObject as $key => $value) {
+                $escapedObject->$key = $this->escapeOutput($value);
             }
-            return $data;
+            return $escapedObject;
         }
 
         if (is_numeric($data)) {
@@ -34,11 +35,7 @@ class LCS_OutputEscape
         }
 
         if (is_string($data)) {
-            $data = trim($data);
-            $data = stripslashes($data);
-            $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-
-            return $data;
+            return htmlspecialchars(trim(stripslashes($data)), ENT_QUOTES, 'UTF-8');
         }
 
         return null; // Return null for unsupported types.
@@ -48,11 +45,12 @@ class LCS_OutputEscape
      * Escape a URL to ensure it is safe for output.
      *
      * @param string $url The URL to escape.
-     * @return string The escaped URL.
+     * @return string|null The escaped URL, or null if invalid.
      */
-    public static function escapeURL($url)
+    public function escapeURL($url)
     {
-        return filter_var($url, FILTER_SANITIZE_URL);
+        $url = filter_var($url, FILTER_SANITIZE_URL);
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 
     /**
@@ -61,7 +59,7 @@ class LCS_OutputEscape
      * @param string $attr The attribute value to escape.
      * @return string The escaped attribute value.
      */
-    public static function escapeAttr($attr)
+    public function escapeAttr($attr)
     {
         return htmlspecialchars($attr, ENT_QUOTES, 'UTF-8');
     }
@@ -72,9 +70,9 @@ class LCS_OutputEscape
      * @param string $html The HTML content to escape.
      * @return string The escaped HTML content.
      */
-    public static function escapeHTML($html)
+    public function escapeHTML($html)
     {
-        return htmlspecialchars($html, ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
@@ -83,9 +81,8 @@ class LCS_OutputEscape
      * @param string $js The JavaScript content to escape.
      * @return string The escaped JavaScript content.
      */
-    public static function escapeJS($js)
+    public function escapeJS($js)
     {
         return json_encode($js, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     }
-
 }

@@ -259,11 +259,11 @@ class LCS_Request
         if ($nonce_verification_required && !$this->isNonceVerified) {
             // Validate the nonce
             $retrieved_nonce = $requestData['nonce'] ?? '';
-            if (!$this->verify_nonce($retrieved_nonce, $nonce_name)) {
+            $verified = $this->verify_nonce($retrieved_nonce, $nonce_name);
+            if (!$verified) {
                 $this->isNonceVerified = false;
                 $this->send_json_error("Unauthorized action.");
             }
-
             $this->isNonceVerified = true;
         }
 
@@ -328,7 +328,7 @@ class LCS_Request
 
             // Hash the received nonce with the action and the same secret key
             $hashed_nonce = hash_hmac('sha256', hex2bin($nonce) . $action, $this->nonce_secret_key);
-
+            
             // Validate the nonce and check for expiration
             if (hash_equals($stored_hashed_nonce, $hashed_nonce) && (time() - $timestamp) < $expiration) {
                 // Invalidate the nonce after use
@@ -350,7 +350,7 @@ class LCS_Request
      *
      * @param string $action The nonce action identifier.
      */
-    private function fair_reset_nonces($action) {
+    public function fair_reset_nonce($action) {
         $this->start_session();
 
         if (!isset($_SESSION['NONCES_RESET_DATA'][$action])) {
@@ -359,6 +359,7 @@ class LCS_Request
                 'trials' => 1
             ];
             unset($_SESSION['nonces'][$action]); // Fair reset nonce
+            $this->create_nonce($action); // Generate a new nonce
             return;
         }
 
@@ -368,6 +369,7 @@ class LCS_Request
 
         if ($trials <= 3) {
             unset($_SESSION['nonces'][$action]); // Fair reset nonce
+            $this->create_nonce($action); // Generate a new nonce
             $_SESSION['NONCES_RESET_DATA'][$action]['trials'] = $trials;
             return;
         }

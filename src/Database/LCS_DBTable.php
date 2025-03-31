@@ -318,11 +318,15 @@ class LCS_DBTable extends LCS_DBManager
         }
 
         // Handle DEFAULT values
-        $default_sql = '';
+        $default_sql = ' NOT NULL';
         if (empty($field_data['primary_key']) && isset($field_data['default'])) {
-            $default_sql = is_numeric($field_data['default']) || $field_data['default'] === 'NULL'
-                ? " DEFAULT {$field_data['default']}"
-                : " DEFAULT '{$field_data['default']}'";
+            if ( is_numeric($field_data['default']) || $field_data['default'] === NULL || $field_data['default'] === 'NULL') {
+                $default_sql = " DEFAULT {$field_data['default']}";
+            } elseif (!$field_data['default'] || $field_data['default'] === false ) {
+                $default_sql = ' NOT NULL';
+            } else {
+                $default_sql = " DEFAULT '{$field_data['default']}'";
+            }
         }
 
         // Handle UNIQUE constraint

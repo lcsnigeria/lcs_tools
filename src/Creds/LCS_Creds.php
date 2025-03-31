@@ -1,6 +1,9 @@
 <?php
 namespace LCSNG_EXT\Creds;
 
+// Include the LCS_Hook class for managing hooks
+use LCSNG_EXT\Hooks\LCS_Hook;
+
 /**
  * Class LCS_Creds
  *
@@ -27,6 +30,13 @@ class LCS_Creds {
     private $CredsEnv;
 
     /**
+     * Instance of the LCS_Hook class for managing hooks.
+     * 
+     * @var LCS_Hook $credsHooks The hook system instance.
+     */
+    private $credsHooks;
+
+    /**
      * Constructor.
      *
      * Initializes the environment and ensures secure keys are available.
@@ -38,6 +48,18 @@ class LCS_Creds {
          */
         $this->CredsEnv = \Dotenv\Dotenv::createImmutable(__DIR__);
         $this->CredsEnv->load();
+
+        /**
+         * Define the LCS_CREDS_HOOKS constant if not already defined.
+         */
+        if (!defined('LCS_CREDS_HOOKS')) {
+            define('LCS_CREDS_HOOKS', new LCS_Hook());
+        }
+
+        /**
+         * Initialize the hook system for managing actions.
+         */
+        $this->credsHooks = LCS_CREDS_HOOKS;
 
         // Ensure keys are initialized and refreshed if necessary
         $this->initializeKeys();
@@ -112,6 +134,9 @@ class LCS_Creds {
         // Update session with the new refresh timestamp
         $this->start_session();
         $_SESSION['LCS_CREDS_LAST_REFRESH_TOKEN'] = time();
+
+        // Trigger hooks for key refresh
+        $this->credsHooks->do_action('creds_keys_refreshed');
     }
 
     /**
