@@ -9,7 +9,7 @@ namespace LCSNG_EXT\Tools;
  *
  * @package LCSNG_EXT\Tools
  */
-class TemplateTools
+class LCS_TemplateTools
 {
     /**
      * Generates and outputs HTML meta tags, Open Graph (OG) tags, Twitter Card metadata,
