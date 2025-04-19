@@ -318,27 +318,34 @@ class LCS_Request
      * @return bool True if the nonce is valid, false otherwise.
      */
     public function verify_nonce($nonce, $action, $expiration = 3600): bool {
-        // Ensure the session is started
-        $this->start_session();
+        try {
+            // Ensure the session is started
+            $this->start_session();
 
-        // Check if the nonce for the action is set in the session
-        if (isset($_SESSION['nonces'][$action])) {
-            $stored_hashed_nonce = $_SESSION['nonces'][$action]['hashed_nonce'];
-            $timestamp = $_SESSION['nonces'][$action]['timestamp'];
-
-            // Hash the received nonce with the action and the same secret key
-            $hashed_nonce = hash_hmac('sha256', hex2bin($nonce) . $action, $this->nonce_secret_key);
+            // Check if the nonce for the action is set in the session
+            if (isset($_SESSION['nonces'][$action])) {
             
-            // Validate the nonce and check for expiration
-            if (hash_equals($stored_hashed_nonce, $hashed_nonce) && (time() - $timestamp) < $expiration) {
-                // Invalidate the nonce after use
-                unset($_SESSION['nonces'][$action]);
-                return true;
-            }
-        }
+                $stored_hashed_nonce = $_SESSION['nonces'][$action]['hashed_nonce'];
+                $timestamp = $_SESSION['nonces'][$action]['timestamp'];
 
-        // Nonce is invalid or expired
-        return false;
+                // Hash the received nonce with the action and the same secret key
+                $hashed_nonce = hash_hmac('sha256', hex2bin($nonce) . $action, $this->nonce_secret_key);
+                
+                // Validate the nonce and check for expiration
+                if (hash_equals($stored_hashed_nonce, $hashed_nonce) && (time() - $timestamp) < $expiration) {
+                    // Invalidate the nonce after use
+                    unset($_SESSION['nonces'][$action]);
+                    return true;
+                }
+            }
+
+            // Nonce is invalid or expired
+            return false;
+        } catch (\Exception $e) {
+            // Log the exception and return false
+            error_log("Nonce verification error: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**
