@@ -1,8 +1,6 @@
 <?php
 namespace LCSNG_EXT\Requests;
 
-use LCSNG_EXT\Creds\LCS_Creds;
-
 /**
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 
  * and handling error reporting.
@@ -11,9 +9,6 @@ class LCS_Request
 {
     /** @var bool Whether to report errors as exceptions */
     public $throwErrors;
-
-    /** @var string Holding the nonce secret key */
-    private $nonce_secret_key;
 
     /** @var bool Whether nonce been verified already */
     private $isNonceVerified = false;
@@ -26,9 +21,6 @@ class LCS_Request
     public function __construct(bool $throwErrors = false)
     {
         $this->throwErrors = $throwErrors;
-
-        $creds = new LCS_Creds();
-        $this->nonce_secret_key = $creds->get_nonce_secret_key();
     }
 
     /**
@@ -36,6 +28,11 @@ class LCS_Request
      *
      * @param bool $stripQueryArgs Whether to remove query parameters from the URI.
      * @return string The request URI.
+     * 
+     * @example
+     * // Example usage:
+     * $this->get_uri(); // "/products/item?id=123"
+     * $this->get_uri(true); // "/products/item"
      */
     public function get_uri(bool $stripQueryArgs = false)
     {
@@ -51,26 +48,41 @@ class LCS_Request
     /**
      * Retrieves a specific segment of the URI path.
      *
-     * @param int|string $position The segment index or 'start'/'end'.
-     * @return string|false The segment value or false if not found.
-     * @throws \Exception If an invalid position is provided.
+     * Note: Query parameters are included unless $stripQueryArgs is set to true.
+     *
+     * @param int|string $position The segment index (0-based) or special keywords 'start' or 'end'.
+     * @param bool $stripQueryArgs Optional. Whether to strip query parameters before extracting segments.
+     * @return string|false The segment value, or false if not found.
+     *
+     * @throws \Exception If an invalid position value is provided.
+     *
+     * @example
+     * // Example URL: "/products/item/view?id=123"
+     * $this->get_uri_path_name(1); // "item"
+     * $this->get_uri_path_name('start'); // "products"
+     * $this->get_uri_path_name('end'); // "view?id=123"
+     * $this->get_uri_path_name(2, true); // "view" (query args stripped)
      */
-    public function get_uri_path_name(int|string $position = 0)
+    public function get_uri_path_name(int|string $position = 0, bool $stripQueryArgs = false)
     {
-        $uri = $this->get_uri();
+        $uri = $this->get_uri($stripQueryArgs);
 
         $allowed_string_position = ['start', 'end'];
-        if (!is_numeric($position) && !in_array($position, $allowed_string_position)) {
-            throw new \Exception("Invalid position value. Must be numeric or one of: " . implode(', ', $allowed_string_position));
+        if (!is_numeric($position) && !in_array($position, $allowed_string_position, true)) {
+            throw new \Exception(
+                "Invalid position value. Must be numeric or one of: " . implode(', ', $allowed_string_position)
+            );
         }
 
-        // Trim leading domain and slashes
-        $uri = preg_replace('#^https?://[^/]+#', '', $uri);
         $pathSegments = explode('/', trim($uri, '/'));
 
-        if ($position === 'start') $position = 0;
-        elseif ($position === 'end') $position = count($pathSegments) - 1;
-        else $position = (int) $position;
+        if ($position === 'start') {
+            $position = 0;
+        } elseif ($position === 'end') {
+            $position = count($pathSegments) - 1;
+        } else {
+            $position = (int) $position;
+        }
 
         return $pathSegments[$position] ?? false;
     }
@@ -107,6 +119,7 @@ class LCS_Request
     {
         if (!isset($_REQUEST[$key])) {
             $this->throw_error("Request variable '$key' is not set.");
+            return;
         }
         unset($_REQUEST[$key]);
     }
@@ -146,6 +159,7 @@ class LCS_Request
         $this->start_session();
         if (!isset($_SESSION[$key])) {
             $this->throw_error("Session variable '$key' is not set.");
+            return;
         }
         unset($_SESSION[$key]);
     }
@@ -271,81 +285,73 @@ class LCS_Request
     }
 
     /**
-    * Generate a secure nonce for a specific action.
-    *
-    * @param string $action The action/name the nonce is tied to.
-    * @param int $expiration The expiration time in seconds, default is 3600 seconds (1 hour).
-    * @param int $length Length of the nonce, default is 32 bytes.
-    * @return string The generated nonce.
-    */
-    public function create_nonce($action, $expiration = 3600, $length = 32) {
-        // Ensure the session is started
+     * Generate a cryptographically secure, reusable nonce for a specific action.
+     *
+     * @param string $action  The action the nonce is tied to (e.g., 'delete_post').
+     * @param int    $ttl     Time-to-live in seconds (default: 3600 = 1 hour).
+     * @param int    $length  Length in bytes before hex encoding (default: 32).
+     * @return string         The nonce string.
+     */
+    public function create_nonce(string $action, int $ttl = 3600, int $length = 32): string {
         $this->start_session();
 
-        // Check if a nonce for this action already exists and is valid
-        if (isset($_SESSION['nonces'][$action])) {
-            $stored_nonce = $_SESSION['nonces'][$action]['nonce'];
-            $timestamp = $_SESSION['nonces'][$action]['timestamp'];
-            
-            // Check if the nonce is still valid
-            if ((time() - $timestamp) < $expiration) {
-                return bin2hex($stored_nonce); // Return existing nonce if valid
+        if (!isset($_SESSION['nonces'])) {
+            $_SESSION['nonces'] = [];
+        }
+
+        // Check if an unexpired nonce for this action exists and reuse it
+        foreach ($_SESSION['nonces'] as $nonce => $data) {
+            if ($data['action'] === $action && $data['expires'] > time()) {
+                return $nonce;
             }
         }
-        
-        // Generate a new random binary string
-        $nonce = random_bytes($length);
-        
-        // Hash the nonce with the action and a secret key
-        $hashed_nonce = hash_hmac('sha256', $nonce . $action, $this->nonce_secret_key);
-        
-        // Store the nonce and timestamp in the session
-        $_SESSION['nonces'][$action] = [
-            'nonce' => $nonce, // Store the original nonce
-            'hashed_nonce' => $hashed_nonce, // Store the hashed nonce for validation
-            'timestamp' => time()
+
+        // Generate a secure, random nonce
+        $nonce = bin2hex(random_bytes($length));
+        $expires = time() + $ttl;
+
+        $_SESSION['nonces'][$nonce] = [
+            'action'  => $action,
+            'expires' => $expires,
         ];
 
-        return bin2hex($nonce);
+        return $nonce;
     }
 
     /**
      * Verify a nonce for a specific action.
      *
-     * @param string $nonce The nonce to verify.
-     * @param string $action The action the nonce is tied to.
-     * @param int $expiration The expiration time in seconds, default is 3600 seconds (1 hour).
-     * @return bool True if the nonce is valid, false otherwise.
+     * @param string $nonce       The nonce to validate.
+     * @param string $action      The expected action tied to the nonce.
+     * @param bool   $single_use  Whether the nonce should be invalidated after verification.
+     * @return bool               True if valid, false otherwise.
      */
-    public function verify_nonce($nonce, $action, $expiration = 3600): bool {
-        try {
-            // Ensure the session is started
-            $this->start_session();
+    public function verify_nonce(string $nonce, string $action, bool $single_use = true): bool {
+        $this->start_session();
 
-            // Check if the nonce for the action is set in the session
-            if (isset($_SESSION['nonces'][$action])) {
-            
-                $stored_hashed_nonce = $_SESSION['nonces'][$action]['hashed_nonce'];
-                $timestamp = $_SESSION['nonces'][$action]['timestamp'];
+        if (!isset($_SESSION['nonces'][$nonce])) {
+            return false; // Nonce doesn't exist
+        }
 
-                // Hash the received nonce with the action and the same secret key
-                $hashed_nonce = hash_hmac('sha256', hex2bin($nonce) . $action, $this->nonce_secret_key);
-                
-                // Validate the nonce and check for expiration
-                if (hash_equals($stored_hashed_nonce, $hashed_nonce) && (time() - $timestamp) < $expiration) {
-                    // Invalidate the nonce after use
-                    unset($_SESSION['nonces'][$action]);
-                    return true;
-                }
-            }
+        $data = $_SESSION['nonces'][$nonce];
 
-            // Nonce is invalid or expired
-            return false;
-        } catch (\Exception $e) {
-            // Log the exception and return false
-            error_log("Nonce verification error: " . $e->getMessage());
+        // Check if the action matches
+        if ($data['action'] !== $action) {
             return false;
         }
+
+        // Check for expiry
+        if ($data['expires'] < time()) {
+            unset($_SESSION['nonces'][$nonce]);
+            return false;
+        }
+
+        // If single-use, invalidate it after this check
+        if ($single_use) {
+            unset($_SESSION['nonces'][$nonce]);
+        }
+
+        return true;
     }
 
     /**
@@ -637,46 +643,41 @@ class LCS_Request
         // Retrieve the User-Agent string from the server
         $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? trim($_SERVER['HTTP_USER_AGENT']) : 'UNKNOWN';
 
-        // Function to check for a specific value within the User-Agent string
-        function contains($needle, $haystack) {
-            return strpos($haystack, $needle) !== false;
-        }
-
         // Browser detection
         $browser = 'Unknown Browser';
-        if (contains('MSIE', $user_agent) || contains('Trident/', $user_agent)) {
+        if ($this->contains('MSIE', $user_agent) || $this->contains('Trident/', $user_agent)) {
             $browser = 'Internet Explorer';
-        } elseif (contains('Edge', $user_agent)) {
+        } elseif ($this->contains('Edge', $user_agent)) {
             $browser = 'Microsoft Edge';
-        } elseif (contains('Firefox', $user_agent)) {
+        } elseif ($this->contains('Firefox', $user_agent)) {
             $browser = 'Mozilla Firefox';
-        } elseif (contains('Chrome', $user_agent) && !contains('Edge', $user_agent)) {
+        } elseif ($this->contains('Chrome', $user_agent) && !$this->contains('Edge', $user_agent)) {
             $browser = 'Google Chrome';
-        } elseif (contains('Safari', $user_agent) && !contains('Chrome', $user_agent)) {
+        } elseif ($this->contains('Safari', $user_agent) && !$this->contains('Chrome', $user_agent)) {
             $browser = 'Apple Safari';
-        } elseif (contains('Opera', $user_agent) || contains('OPR', $user_agent)) {
+        } elseif ($this->contains('Opera', $user_agent) || $this->contains('OPR', $user_agent)) {
             $browser = 'Opera';
         }
 
         // Platform detection
         $platform = 'Unknown Platform';
-        if (contains('Windows', $user_agent)) {
+        if ($this->contains('Windows', $user_agent)) {
             $platform = 'Windows';
-        } elseif (contains('Macintosh', $user_agent) || contains('Mac OS X', $user_agent)) {
+        } elseif ($this->contains('Macintosh', $user_agent) || $this->contains('Mac OS X', $user_agent)) {
             $platform = 'Mac OS';
-        } elseif (contains('Linux', $user_agent)) {
+        } elseif ($this->contains('Linux', $user_agent)) {
             $platform = 'Linux';
-        } elseif (contains('Android', $user_agent)) {
+        } elseif ($this->contains('Android', $user_agent)) {
             $platform = 'Android';
-        } elseif (contains('iPhone', $user_agent) || contains('iPad', $user_agent)) {
+        } elseif ($this->contains('iPhone', $user_agent) || $this->contains('iPad', $user_agent)) {
             $platform = 'iOS';
         }
 
         // Device type detection (basic)
         $device_type = 'Desktop';
-        if (contains('Mobi', $user_agent)) {
+        if ($this->contains('Mobi', $user_agent)) {
             $device_type = 'Mobile';
-        } elseif (contains('Tablet', $user_agent) || contains('iPad', $user_agent)) {
+        } elseif ($this->contains('Tablet', $user_agent) || $this->contains('iPad', $user_agent)) {
             $device_type = 'Tablet';
         }
 
@@ -751,6 +752,86 @@ class LCS_Request
     
         header($allowedHeaders[$header] . ': ' . $value, $replace, $http_response_code);
     }    
+
+    /**
+     * Retrieves the current URL of the request.
+     *
+     * This function constructs the full URL based on server variables,
+     * including protocol, host, and request URI. It can optionally exclude
+     * the protocol and account for AJAX behavior.
+     *
+     * When handling AJAX requests, the request URI typically points to the
+     * AJAX endpoint itself rather than the original page. If $isolateAjaxEffects
+     * is true, this function will prioritize the HTTP referer to reflect the
+     * actual page that initiated the AJAX call.
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned URL.
+     * @param bool $isolateAjaxEffects Whether to prioritize HTTP referer during AJAX requests to reflect the real source page. Default is true.
+     * @return string The current URL.
+     */
+    public function get_url(bool $includeProtocol = false, bool $isolateAjaxEffects = true): string
+    {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+
+        $url = $protocol . $host . $uri;
+
+        if ($isolateAjaxEffects && $this->is_ajax_request() && isset($_SERVER['HTTP_REFERER'])) {
+            $url = $_SERVER['HTTP_REFERER'];
+        }
+
+        if (!$includeProtocol) {
+            $url = preg_replace('#^https?://#i', '', $url); // case-insensitive just in case
+        }
+
+        return trim($url);
+    }
+
+    /**
+     * Retrieves the site's domain name.
+     *
+     * This function returns the current domain, with an option to include
+     * the protocol (http or https). It excludes any URI paths or query strings.
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned domain. Default is false.
+     * @return string The domain name, optionally prefixed with the protocol.
+     */
+    public function get_domain(bool $includeProtocol = false): string
+    {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        $domain = $includeProtocol ? ($protocol . $host) : $host;
+
+        return trim($domain);
+    }
+
+    /**
+     * Retrieves the site's host name.
+     *
+     * This function uses the get_domain method to return the host name,
+     * optionally including the protocol (http/https).
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned host. Default is false.
+     * @return string The host name, optionally prefixed with the protocol.
+     */
+    public function get_host(bool $includeProtocol = false): string
+    {
+        return $this->get_domain($includeProtocol);
+    }
+
+    /**
+     * Helper method to check if a string contains a specific substring.
+     *
+     * @param string $needle
+     * @param string $haystack
+     * @return bool
+     */
+    protected function contains(string $needle, string $haystack): bool
+    {
+        return strpos($haystack, $needle) !== false;
+    }
 
     /**
      * Throws an error if error reporting is enabled.

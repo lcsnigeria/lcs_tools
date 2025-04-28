@@ -6,6 +6,7 @@ use LCSNG_EXT\Requests\LCS_Request;
 /**
  * Manages routing and template rendering.
  */
+#[\AllowDynamicProperties]
 class LCS_RoutingController extends LCS_Request
 {
     
@@ -112,14 +113,6 @@ class LCS_RoutingController extends LCS_Request
     private function validate_template(): array
     {
         /**
-         * Default template keys that must be validated.
-         * These are the core templates required for the application.
-         *
-         * @var array $default_template_keys
-         */
-        $default_template_keys = ['home', 'search', 'post', 'profile', 'signup', 'login', 'error_404'];
-
-        /**
          * Merge predefined templates with any additional templates provided by the user.
          *
          * @var array $template_paths
@@ -147,18 +140,16 @@ class LCS_RoutingController extends LCS_Request
                         foreach ( $temp_dir_files as $file ) {
                             $file_key = pathinfo($file, PATHINFO_FILENAME);
                             $file_path = "$temp_dir/$file";
-                            $template_paths[$file_key] = $file_path;
-                            if (in_array($key, $default_template_keys)) {
-                                $this->$key = $file_path;
-                            } else {
-                                $this->add_template[$key] = $file_path;
+                            if ($this->template_key_match_path($file_key, $file_path)) {
+                                $template_paths[$file_key] = $file_path;
+                                $this->$file_key = $file_path;
                             }
                         }
                     }
                 }
             }
         }
-
+        
         // Validate that all required templates exist
         foreach ($template_paths as $key => $value) {
             if (!empty($value) && !file_exists($value)) {
@@ -167,6 +158,21 @@ class LCS_RoutingController extends LCS_Request
         }
 
         return $template_paths;
+    }
+
+    /**
+     * Checks if a given template key matches a file path.
+     *
+     * This method verifies if the provided key corresponds to the file name
+     * (without extension) of the given path. It supports both `.php` and `.html` extensions.
+     *
+     * @param string $key The template key to match.
+     * @param string $path The file path to check.
+     * @return bool True if the key matches the file path, false otherwise.
+     */
+    private function template_key_match_path(string $key, string $path): bool
+    {
+        return preg_match("/\/$key\.(php|html)$/i", $path);
     }
 
     /**
@@ -208,7 +214,7 @@ class LCS_RoutingController extends LCS_Request
     public function render_template_by_key(string $template_key, bool $render404onError = false)
     {
         $template_path = $this->get_template_path($template_key);
-
+        
         if (!$template_path) {
             if ($render404onError) {
                 $template_path = $this->error_404;

@@ -55,6 +55,47 @@ class LCS_Mail
     }
 
     /**
+     * Switches the SMTP port and adjusts the encryption method accordingly.
+     * 
+     * This method updates the PHPMailer instance to use a different SMTP port and
+     * automatically configures the appropriate encryption protocol based on the selected port.
+     * 
+     * Supported ports and their encryption methods:
+     * - 587 => ENCRYPTION_STARTTLS
+     * - 465 => ENCRYPTION_SMTPS
+     * - 25  => ENCRYPTION_STARTTLS
+     * 
+     * If an unsupported port is provided, an Exception will be thrown.
+     * 
+     * @param int $port The SMTP port to switch to (e.g., 587, 465, 25).
+     * 
+     * @throws Exception if an unsupported port is specified.
+     * 
+     * Usage Example:
+     * 
+     * ```php
+     * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'password');
+     * $mailer->switchPort(465); // Switch to port 465 using SMTPS encryption
+     * ```
+     */
+    public function switchPort(int $port) 
+    {
+        $encryptData = [
+            587 => PHPMailer::ENCRYPTION_STARTTLS,
+            465 => PHPMailer::ENCRYPTION_SMTPS,
+            25  => PHPMailer::ENCRYPTION_STARTTLS,
+        ];
+
+        if (array_key_exists($port, $encryptData)) {
+            $this->port = $port;
+            $this->mailer->SMTPSecure = $encryptData[$port];
+            $this->mailer->Port = $port;
+        } else {
+            throw new Exception("Unsupported port: {$port}. Please use a valid port (e.g., 587, 465, 25).");
+        }
+    }
+
+    /**
      * Send an email using PHPMailer.
      * 
      * This method uses the PHPMailer library to send an email. It supports specifying recipients, subjects, 

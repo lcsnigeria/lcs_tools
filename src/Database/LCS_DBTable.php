@@ -293,11 +293,16 @@ class LCS_DBTable extends LCS_DBManager
 
         // Handle length/precision for applicable data types
         $length_sql = '';
-        if (in_array($dataType, ['VARCHAR', 'CHAR', 'DECIMAL', 'FLOAT', 'DOUBLE'])) {
+        if (in_array($dataType, ['VARCHAR', 'CHAR'])) {
             if (empty($field_data['length_or_precision']) || !is_numeric($field_data['length_or_precision']) || intval($field_data['length_or_precision']) <= 0) {
             throw new \Exception("$dataType requires a valid length/precision.");
             }
             $length_sql = "(".intval($field_data['length_or_precision']).")";
+        } elseif (in_array($dataType, ['DECIMAL', 'FLOAT', 'DOUBLE']) && !empty($field_data['length_or_precision'])) {
+            $MD = $this->validatePrecisionAndScale($field_data['length_or_precision']);
+            $M = $MD[0];
+            $D = $MD[1];
+            $length_sql = "($M,$D)";
         } elseif (in_array($dataType, ['ENUM', 'SET'])) {
             if (empty($field_data['length_or_precision']) || !is_array($field_data['length_or_precision']) || count($field_data['length_or_precision']) === 0) {
             throw new \Exception("$dataType requires an array of valid values.");
@@ -357,6 +362,85 @@ class LCS_DBTable extends LCS_DBManager
         $this->table_field_sql .= (empty($this->table_field_sql) ? '' : ', ') . $column_sql;
 
         return true;
+    }
+
+    /**
+     * Validates the precision (M) and scale (D) for FLOAT, DOUBLE, or DECIMAL types.
+     * Ensures the format is valid and that scale does not exceed precision, 
+     * along with enforcing valid ranges for both precision and scale.
+     * 
+     * @param string $md The precision and scale in the format 'M,D' (e.g., '10,2').
+     * @return array Returns an array with two integers: [0] Precision (M), [1] Scale (D).
+     * @throws Exception Throws an exception if:
+     *    - The format is invalid.
+     *    - Scale (D) is greater than precision (M).
+     *    - Precision (M) is outside the range of 1 to 65.
+     *    - Scale (D) is negative.
+     * 
+     * Example usage:
+     * 
+     * ```php
+     * // Valid input
+     * try {
+     *     $md = '10,2';
+     *     $result = validatePrecisionAndScale($md);
+     *     echo 'Valid: ' . json_encode($result) . "\n"; // Outputs: [10, 2]
+     * } catch (Exception $e) {
+     *     echo 'Error: ' . $e->getMessage() . "\n";
+     * }
+     * 
+     * // Invalid input: scale exceeds precision
+     * try {
+     *     $md = '100,150';
+     *     $result = validatePrecisionAndScale($md); // Throws exception
+     * } catch (Exception $e) {
+     *     echo 'Error: ' . $e->getMessage() . "\n"; // Outputs: 'Scale (D) cannot be greater than precision (M).'
+     * }
+     * 
+     * // Invalid input: precision out of range
+     * try {
+     *     $md = '1000,2';
+     *     $result = validatePrecisionAndScale($md); // Throws exception
+     * } catch (Exception $e) {
+     *     echo 'Error: ' . $e->getMessage() . "\n"; // Outputs: 'Precision (M) must be between 1 and 65.'
+     * }
+     * 
+     * // Invalid input: negative scale
+     * try {
+     *     $md = '10,-2';
+     *     $result = validatePrecisionAndScale($md); // Throws exception
+     * } catch (Exception $e) {
+     *     echo 'Error: ' . $e->getMessage() . "\n"; // Outputs: 'Scale (D) cannot be negative.'
+     * }
+     * ```
+     */
+    function validatePrecisionAndScale($md) {
+        // Step 1: Check if the format is valid: M,D (e.g., 10,2 or 100,10)
+        if (!preg_match('/^(\d+),(\d+)$/', $md, $matches)) {
+            throw new \Exception('Invalid format. Ensure the format is M,D (e.g., 10,2).');
+        }
+
+        // Step 2: Extract precision (M) and scale (D)
+        $precision = (int)$matches[1];
+        $scale = (int)$matches[2];
+
+        // Step 3: Check that scale (D) is not greater than precision (M)
+        if ($scale > $precision) {
+            throw new \Exception('Scale (D) cannot be greater than precision (M).');
+        }
+
+        // Step 4: Check that precision (M) is within a valid range (for MySQL, up to 65)
+        if ($precision < 1 || $precision > 65) {
+            throw new \Exception('Precision (M) must be between 1 and 65.');
+        }
+
+        // Step 5: Check that scale (D) is within a valid range (cannot be negative)
+        if ($scale < 0) {
+            throw new \Exception('Scale (D) cannot be negative.');
+        }
+
+        // Step 6: If all checks pass, return an array with precision (M) and scale (D)
+        return [$precision, $scale];
     }
 
     /**

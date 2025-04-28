@@ -808,6 +808,9 @@ class LCS_DBManager {
      * @return array The fetched rows as an array.
      */
     private function fetch_all($sql, $prepare = true, $values = null, $specifiers = null): array {
+        // Refresh fetch mode
+        $this->refresh_fetch_mode();
+
         if ($prepare) {
             // Prepared Statement Handling
             $stmt = $this->prepare($sql, $values, $specifiers);
@@ -1379,6 +1382,38 @@ class LCS_DBManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Refreshes the fetch mode for query results.
+     *
+     * @param string|null $fetchMode The desired fetch mode ('ARRAY' or 'OBJECT'). Defaults to the current fetch mode.
+     * @throws \Exception If an invalid fetch mode is provided.
+     */
+    private function refresh_fetch_mode(string|null $fetchMode = null): void {
+        $FM = is_null($fetchMode) ? $this->FETCH_MODE : $fetchMode;
+
+        try {
+            // Validate the fetch mode
+            if (!in_array(strtoupper($FM), ['ARRAY', 'OBJECT'])) {
+                throw new \Exception("Invalid fetch mode '{$FM}'. Valid options are 'ARRAY' or 'OBJECT'.");
+            }
+
+            // Update fetch mode settings based on the SQL manager
+            $FM = strtoupper($FM);
+            if ($this->is_pdo_manager()) {
+                $fmSettings = [
+                    'ARRAY' => \PDO::FETCH_ASSOC,
+                    'OBJECT' => \PDO::FETCH_OBJ,
+                ];
+                $this->connection->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, $fmSettings[$FM]);
+            }
+
+            $this->FETCH_MODE = $FM;
+        } catch (\Exception $e) {
+            $this->set_last_error("Error refreshing fetch mode: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
