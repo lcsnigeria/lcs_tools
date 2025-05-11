@@ -789,6 +789,26 @@ class LCS_Request
     }
 
     /**
+     * Extracts the query string from a given URL or $this->get_url(true).
+     *
+     * This function takes a URL and returns the query string portion,
+     * preserving any array notation used in the parameters.
+     *
+     * @param string|null $url The URL from which to extract the query string. Defaults to the current URL.
+     * @return string|null The query string without the base URL, or null if no query string exists.
+     */
+    public function get_url_query_arg(?string $url = null): ?string
+    {
+        if ($url === null) {
+            $url = $this->get_url(true);
+        }
+
+        $parsedUrl = parse_url($url);
+
+        return isset($parsedUrl['query']) && !empty($parsedUrl['query']) ? $parsedUrl['query'] : null;
+    }
+
+    /**
      * Retrieves the site's domain name.
      *
      * This function returns the current domain, with an option to include

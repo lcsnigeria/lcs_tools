@@ -845,6 +845,63 @@ class LCS_DBTable extends LCS_DBManager
     }
 
     /**
+     * Adds a timestamp column to the SQL schema, with support for various default formats.
+     *
+     * @param string  $name                  The column name. Defaults to 'creation_date'.
+     * @param bool    $useCurrentTimeAsDefault Whether to use CURRENT_TIMESTAMP as default.
+     * @param mixed   $defaultTime           A custom default time if not using current. Can be:
+     *                                       - String in 'DD/MM/YYYY' or 'YYYY/MM/DD' format
+     *                                       - Integer Unix timestamp (seconds)
+     *                                       - Relative string like '1 Day', '2 Weeks', etc.
+     * 
+     * @throws InvalidArgumentException     If the date format is not supported or invalid.
+     * @return void
+     */
+    public function add_timestamp($name = 'creation_date', $useCurrentTimeAsDefault = true, $defaultTime = null)
+    {
+        $this->validate_column_addition($name);
+
+        $default = NULL;
+
+        if ($useCurrentTimeAsDefault) {
+            $default = 'CURRENT_TIMESTAMP';
+        } elseif (!is_null($defaultTime)) {
+            $dateTime = null;
+
+            // Numeric Unix timestamp
+            if (is_numeric($defaultTime)) {
+                $dateTime = (new \DateTime())->setTimestamp((int)$defaultTime);
+            }
+            // DD/MM/YYYY or YYYY/MM/DD
+            elseif (preg_match('#^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})$#', $defaultTime, $m)) {
+                $y = strlen($m[1]) === 4 ? $m[1] : $m[3]; // year
+                $mth = $m[2];
+                $d = strlen($m[1]) === 2 ? $m[1] : $m[3]; // day
+
+                $dateTime = \DateTime::createFromFormat('Y-m-d H:i:s', "$y-$mth-$d 00:00:00");
+            }
+            // Relative formats like '1 day', '2 weeks'
+            elseif (is_string($defaultTime)) {
+                try {
+                    $dateTime = new \DateTime();
+                    $dateTime->modify(strtolower($defaultTime));
+                } catch (\Exception $e) {
+                    throw new \InvalidArgumentException("Invalid relative date format: $defaultTime");
+                }
+            }
+
+            if (!$dateTime) {
+                throw new \InvalidArgumentException("Could not parse default timestamp value: $defaultTime");
+            }
+
+            $default = "'" . $dateTime->format('Y-m-d H:i:s') . "'";
+        }
+
+        $this->creation_date_sql = ($this->altering_table ? "ADD COLUMN " : "") .
+            "`$name` TIMESTAMP DEFAULT $default";
+    }
+
+    /**
      * Adds an update timestamp field.
      *
      * @param string $name The column name.

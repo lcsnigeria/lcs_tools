@@ -5,13 +5,6 @@ use LCSNG_EXT\DataValidation\LCS_InputSanitizer;
 
 class LCS_InputValidation 
 {
-    
-    private $sanitizer;
-
-    public function __construct()
-    {
-        $this->sanitizer = new LCS_InputSanitizer();
-    }
    
     /**
      * Extract name and email address from a string.
@@ -19,7 +12,7 @@ class LCS_InputValidation
      * @param string $input The input string in the format 'Name <email@example.com>', 'Name:email@example.com', or 'email@example.com'.
      * @return array|false Associative array with 'name' and 'email' on success, false on failure.
      */
-    public function extractMailerAddress($input) {
+    public static function extractMailerAddress($input) {
 
         $result = ['name' => '', 'email' => ''];
 
@@ -28,8 +21,8 @@ class LCS_InputValidation
             // Check if we have matches
             if (!empty($matches)) {
                 foreach ( $matches as $match ) {
-                    if ($this->isEmailValid($match)) {
-                        $result['email'] = $this->sanitizer->sanitizeEmail(trim($match));
+                    if (self::isEmailValid($match)) {
+                        $result['email'] = LCS_InputSanitizer::sanitizeEmail(trim($match));
                     } else {
                         $result['name'] = trim($match);
                     }
@@ -45,7 +38,7 @@ class LCS_InputValidation
      * @param string $email
      * @return bool
      */
-    public function isEmailValid($email) {
+    public static function isEmailValid($email) {
         // Remove all illegal characters from email
         $email = filter_var($email, FILTER_SANITIZE_EMAIL);
 
@@ -63,7 +56,7 @@ class LCS_InputValidation
      * @param string $username
      * @return bool
      */
-    public function isUsernameValid($username) {
+    public static function isUsernameValid($username) {
         // Example username validation: only allow alphanumeric characters and underscores, 3-20 characters long
         return preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username);
     }
@@ -75,7 +68,7 @@ class LCS_InputValidation
      *
      * @return bool True if the name is valid, false otherwise.
      */
-    public function isNameValid($value) {
+    public static function isNameValid($value) {
         if (empty($value)) {
             return false;
         }
@@ -92,7 +85,7 @@ class LCS_InputValidation
      * @param string $gender
      * @return bool
      */
-    public function isGenderValid($gender) {
+    public static function isGenderValid($gender) {
         // Example gender validation: only allow 'male', 'female', or 'other'
         $valid_genders = ['male', 'female', 'unspecified'];
         return in_array(strtolower($gender), $valid_genders);
@@ -105,7 +98,7 @@ class LCS_InputValidation
      *
      * @return string The username part of the email address with dots removed.
      */
-    public function extractEmailUsername($email) {
+    public static function extractEmailUsername($email) {
         // Get the part of the email before the "@" symbol
         $username = substr($email, 0, strpos($email, '@'));
         
@@ -124,7 +117,7 @@ class LCS_InputValidation
      *
      * @return string The extracted substring.
      */
-    public function retrieveCharacters($characters, $limit, $startingPoint = null) {
+    public static function retrieveCharacters($characters, $limit, $startingPoint = null) {
         // If starting point is not provided, set it to 0
         if ($startingPoint === null) {
             $startingPoint = 0;
@@ -143,7 +136,7 @@ class LCS_InputValidation
      *
      * @return string The trimmed name.
      */
-    public function trimName($value) {
+    public static function trimName($value) {
         // Use a regular expression to remove digits and special characters
         // while preserving diacritical marks and other marks
         return preg_replace('/[^\p{L}\s\'-]/u', '', $value);
@@ -156,7 +149,7 @@ class LCS_InputValidation
      *
      * @return string|null The transformed date in the format `d-m-Y` or null if the date is invalid.
      */
-    public function validateDOB($date) {
+    public static function validateDOB($date) {
         // Replace slashes, commas, and spaces with hyphens for consistency
         $date = str_replace(['/', ',', ' '], '-', $date);
 
@@ -196,27 +189,27 @@ class LCS_InputValidation
     /**
      * Validate and transform a date of birth with various formats to the format `d-m-Y`.
      *
-     * This method is a wrapper for `$this->validateDOB`, providing compatibility for date of birth inputs.
+     * This method is a wrapper for `self::validateDOB`, providing compatibility for date of birth inputs.
      *
      * @param string $dateOfBirth The date of birth string in various formats, potentially with month names.
      *
      * @return string|null The transformed date in the format `d-m-Y`, or null if the date is invalid.
      */
-    public function validateDateOfBirth($dateOfBirth) {
-        return $this->validateDOB($dateOfBirth);
+    public static function validateDateOfBirth($dateOfBirth) {
+        return self::validateDOB($dateOfBirth);
     }
 
     /**
      * Validate and transform a birthday with various formats to the format `d-m-Y`.
      *
-     * This method is a wrapper for `$this->validateDOB`, providing compatibility for birthday inputs.
+     * This method is a wrapper for `self::validateDOB`, providing compatibility for birthday inputs.
      *
      * @param string $birthday The birthday string in various formats, potentially with month names.
      *
      * @return string|null The transformed date in the format `d-m-Y`, or null if the date is invalid.
      */
-    public function validateBirthday($birthday) {
-        return $this->validateDOB($birthday);
+    public static function validateBirthday($birthday) {
+        return self::validateDOB($birthday);
     }
 
     /**
@@ -226,7 +219,7 @@ class LCS_InputValidation
      *
      * @return int The calculated age in years, or 0 if the format is incorrect.
      */
-    public function getAge($dateOfBirth) {
+    public static function getAge($dateOfBirth) {
         // Define an array of possible date formats
         $formats = ['Y m d', 'Y-m-d', 'd/m/Y', 'd m Y', 'd-m-Y', 'Y/m/d'];
 
@@ -250,7 +243,7 @@ class LCS_InputValidation
      *
      * @return string A string that joins the names appropriately based on their count.
      */
-    public function namesConjunction($names) {
+    public static function namesConjunction($names) {
         // Get the total number of names
         $total_names = count($names);
 
@@ -264,4 +257,5 @@ class LCS_InputValidation
             return $names[0] . ", " . $names[1] . " and " . $remaining_count . " other" . ($remaining_count > 1 ? 's' : '');
         }
     }
+
 }

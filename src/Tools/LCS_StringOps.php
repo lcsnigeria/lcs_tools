@@ -48,6 +48,113 @@ class LCS_StringOps {
     }
 
     /**
+     * De-slugify a string into readable text, applying flexible casing and optional substring removal.
+     *
+     * - Replaces all occurrences of `$separator` with spaces (if present).
+     * - Applies one of several casing styles (UTF-8–safe).
+     * - Removes the first occurrence of `$strip` (case-insensitive), if provided.
+     * - Trims leading and trailing whitespace.
+     *
+     * Available casing styles:
+     *   • `uppercase`   — ALL UPPERCASE  
+     *   • `lowercase`   — all lowercase  
+     *   • `capitalize`  — Capitalize Each Word  
+     *   • `titlecase`   — Capitalize first character only  
+     *   • `camelcase`   — firstWord lower, SubsequentWords capitalized, no spaces  
+     *   • `pascalcase`  — EveryWord Capitalized, no spaces  
+     *
+     * @param  string  $str         The input slug (e.g. "fixed-price" or "i_love_you_babe").
+     * @param  string  $separator   The delimiter used in the slug (default `"-"`).
+     * @param  string  $casing      One of: `uppercase`, `lowercase`, `capitalize`,  
+     *                              `titlecase`, `camelcase`, `pascalcase` (default `"titlecase"`).
+     * @param  string  $strip       Optional substring to remove (all matches, case-insensitive).
+     * @return string               The de-slugified, cased, and stripped result.
+     *
+     * Examples:
+     * ```php
+     * deSlugify('fixed-price')                         // → "Fixed price"
+     *
+     * deSlugify('fixed_price', '_', 'uppercase', 'price') // → "FIXED"
+     *
+     * deSlugify('fixed-price', '-', 'capitalize', 'price') // → "Fixed"
+     *
+     * deSlugify('fixed-price', '-', 'titlecase', '')       // → "Fixed price"
+     *
+     * deSlugify('i_love_you_babe', '_', 'camelcase', 'BABE') // → "iLoveYou"
+     *
+     * deSlugify('no_time_to_DIE', '_', 'pascalcase', 'die') // → "NoTimeTo"
+     * ```
+     */
+    public static function deSlugify(
+        string $str,
+        string $separator = '-',
+        string $casing = 'titlecase',
+        string $strip = ''
+    ): string {
+        // 1) Replace separator with spaces if present
+        $text = strpos($str, $separator) !== false
+            ? str_replace($separator, ' ', $str)
+            : $str;
+
+        // Normalize to lowercase for consistent transforms
+        $lower = mb_strtolower($text, 'UTF-8');
+
+        // 2) Apply casing (note: 'capitalize' ≃ title-case, 'titlecase' ≃ sentence-case)
+        switch (strtolower($casing)) {
+            case 'uppercase':
+                $text = mb_strtoupper($text, 'UTF-8');
+                break;
+
+            case 'lowercase':
+                $text = $lower;
+                break;
+
+            case 'capitalize':
+                // Capitalize the first letter of each word
+                $text = mb_convert_case($lower, MB_CASE_TITLE, 'UTF-8');
+                break;
+
+            case 'titlecase':
+                // Capitalize only the very first character
+                $first = mb_strtoupper(mb_substr($lower, 0, 1, 'UTF-8'), 'UTF-8');
+                $text  = $first . mb_substr($lower, 1, null, 'UTF-8');
+                break;
+
+            case 'camelcase':
+                $words = explode(' ', $lower);
+                $first = array_shift($words);
+                $camel = $first;
+                foreach ($words as $w) {
+                    $camel .= mb_convert_case($w, MB_CASE_TITLE, 'UTF-8');
+                }
+                $text = $camel;
+                break;
+
+            case 'pascalcase':
+                $words = explode(' ', $lower);
+                $pascal = '';
+                foreach ($words as $w) {
+                    $pascal .= mb_convert_case($w, MB_CASE_TITLE, 'UTF-8');
+                }
+                $text = $pascal;
+                break;
+
+            default:
+                // Unknown casing: leave text as-is
+                break;
+        }
+
+        // 3) Strip first occurrence of $strip (case-insensitive)
+        if ($strip !== '') {
+            $pattern = '/' . preg_quote($strip, '/') . '/i';
+            $text = preg_replace($pattern, '', $text);
+        }
+
+        // 4) Trim whitespace
+        return self::removeExtraSpaces(trim($text));
+    }
+
+    /**
      * Reverses the characters in a string.
      *
      * @param string $str The input string.
@@ -163,6 +270,41 @@ class LCS_StringOps {
         }
 
         return str_replace($character, '', $string);
+    }
+
+    /**
+     * Format a numeric amount as a localized currency string.
+     *
+     * - Supports optional currency symbol and decimal precision.
+     * - Adds thousands separators (comma) and decimal point (dot).
+     * - Optionally trims trailing zeros after decimal point.
+     *
+     * @param  float|int  $amount       The numeric amount to format.
+     * @param  string     $symbol       Currency symbol to prefix (default: `"₦"`).
+     * @param  int|null   $precision    Decimal places (null = auto-trim, default: `2`).
+     * @return string                   The formatted amount string (e.g. "₦12,500.50").
+     *
+     * Examples:
+     * ```php
+     * formatAmount(12500)                   // → "₦12,500.00"
+     *
+     * formatAmount(12500.5, '₦', null)      // → "₦12,500.5"
+     *
+     * formatAmount(12500.00, '$', null)     // → "$12,500"
+     *
+     * formatAmount(12500.007, '€', 2)       // → "€12,500.01"
+     * ```
+     */
+    public static function formatAmount(
+        float|int $amount,
+        string $symbol = '₦',
+        ?int $precision = 2
+    ): string {
+        $formatted = is_null($precision)
+            ? rtrim(rtrim(number_format((float) $amount, 2, '.', ','), '0'), '.')
+            : number_format((float) $amount, $precision, '.', ',');
+
+        return $symbol . $formatted;
     }
 
 }

@@ -103,6 +103,68 @@ class LCS_Date {
     }
 
     /**
+     * Returns a formatted or timestamp-based interpretation of a relative date string.
+     *
+     * This utility method allows easy transformation of human-friendly or programmatic date strings into
+     * either Unix timestamps or formatted date strings. Useful for interpreting user inputs, scheduling,
+     * or formatting stored datetime values.
+     *
+     * Supported special format values (case-insensitive):
+     *  - 'getAsTime', 'time', 'seconds' → Returns timestamp
+     *  - 'standard' → 'YYYY-MM-DD'
+     *  - 'modern' → 'DD-MM-YYYY'
+     *  - 'standard with time' → 'YYYY-MM-DD HH:MM:SS'
+     *  - 'modern with time' → 'DD-MM-YYYY HH:MM:SS'
+     *  - Any other valid `DateTime::format()` string will be respected.
+     *
+     * @param string $string A relative or absolute date/time expression (e.g. 'now', '+1 week', '2024/12/31', 'next Monday').
+     * @param string $format Output format type or a valid PHP date format string.
+     *
+     * @return int|string Returns a Unix timestamp (int) or a formatted date string.
+     *
+     * @throws \Exception If the input string is invalid or not parsable by DateTime.
+     *
+     * @example
+     *   $this->getRelativeDate();                              // returns current timestamp
+     *   $this->getRelativeDate('2 days');                      // timestamp two days from now
+     *   $this->getRelativeDate('2025/01/01', 'Y-m-d');         // '2025-01-01'
+     *   $this->getRelativeDate('next Friday', 'l');            // 'Friday'
+     *   $this->getRelativeDate('1 day', 'modern');             // '12-05-2025'
+     *   $this->getRelativeDate('now', 'standard with time');   // '2025-05-11 18:25:00'
+     */
+    public function getRelativeDate($string = 'now', $format = 'getAsTime') {
+        try {
+            // Create a DateTime object from the input string
+            $date = new \DateTime($string);
+            $format = strtolower(trim($format));
+
+            // Return timestamp for time-based requests
+            if (in_array($format, ['getastime', 'time', 'seconds'], true)) {
+                return $date->getTimestamp();
+            }
+
+            // Handle predefined readable formats
+            switch ($format) {
+                case 'standard':
+                    return $date->format('Y-m-d');
+                case 'modern':
+                    return $date->format('d-m-Y');
+                case 'standard with time':
+                    return $date->format('Y-m-d H:i:s');
+                case 'modern with time':
+                    return $date->format('d-m-Y H:i:s');
+                default:
+                    // Assume it's a valid PHP date format string
+                    return $date->format($format);
+            }
+
+        } catch (\Exception $e) {
+            // Propagate error with descriptive message
+            throw new \Exception("Invalid date string: '$string'. " . $e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
      * Get the current year.
      *
      * @return string The current year in numeric format.

@@ -16,16 +16,16 @@ class LCS_OutputEscape
      * @param mixed $data The data to escape (can be string, numeric, array, or object).
      * @return mixed The escaped data, or null if unsupported type.
      */
-    public function escapeOutput($data)
+    public static function escapeOutput($data)
     {
         if (is_array($data)) {
-            return array_map([$this, 'escapeOutput'], $data);
+            return array_map([self::class, 'escapeOutput'], $data);
         }
 
         if (is_object($data)) {
             $escapedObject = clone $data; // Avoid modifying original object reference
             foreach ($escapedObject as $key => $value) {
-                $escapedObject->$key = $this->escapeOutput($value);
+                $escapedObject->$key = self::escapeOutput($value);
             }
             return $escapedObject;
         }
@@ -47,7 +47,7 @@ class LCS_OutputEscape
      * @param string $url The URL to escape.
      * @return string|null The escaped URL, or null if invalid.
      */
-    public function escapeURL($url)
+    public static function escapeURL($url)
     {
         $url = filter_var($url, FILTER_SANITIZE_URL);
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
@@ -59,7 +59,7 @@ class LCS_OutputEscape
      * @param string $attr The attribute value to escape.
      * @return string The escaped attribute value.
      */
-    public function escapeAttr($attr)
+    public static function escapeAttr($attr)
     {
         return htmlspecialchars($attr, ENT_QUOTES, 'UTF-8');
     }
@@ -70,7 +70,7 @@ class LCS_OutputEscape
      * @param string $html The HTML content to escape.
      * @return string The escaped HTML content.
      */
-    public function escapeHTML($html)
+    public static function escapeHTML($html)
     {
         return htmlspecialchars($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
@@ -81,7 +81,7 @@ class LCS_OutputEscape
      * @param string $js The JavaScript content to escape.
      * @return string The escaped JavaScript content.
      */
-    public function escapeJS($js)
+    public static function escapeJS($js)
     {
         return json_encode($js, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     }
