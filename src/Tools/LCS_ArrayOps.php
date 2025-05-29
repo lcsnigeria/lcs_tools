@@ -158,4 +158,42 @@ class LCS_ArrayOps
     {
         return array_keys($array) === range(0, count($array) - 1);
     }
+
+    /**
+     * Converts an array of strings into a human-readable conjunction string.
+     *
+     * You can control when to summarize the remaining items using the $summaryStage parameter.
+     * If $summaryStage is 0 or greater than or equal to the number of items, no summarization will happen.
+     *
+     * Examples:
+     * - arrayToConjunction(['John']) → "John"
+     * - arrayToConjunction(['John', 'Mike']) → "John and Mike"
+     * - arrayToConjunction(['John', 'Mike', 'Teddy'], 2) → "John, Mike and 1 other"
+     * - arrayToConjunction(['John', 'Mike', 'Teddy', 'Lucy'], 0) → "John, Mike, Teddy and Lucy"
+     * - arrayToConjunction(['John', 'Mike', 'Teddy', 'Lucy'], 3) → "John, Mike, Teddy and 1 other"
+     *
+     * @param array $items The array of strings to be joined.
+     * @param int $summaryStage The number of items to list before summarizing the rest. Defaults to 2.
+     * @return string The formatted conjunction string.
+     */
+    public static function arrayToConjunction(array $items, int $summaryStage = 2): string {
+        $total = count($items);
+
+        if ($total === 0) return '';
+        if ($total === 1 || $summaryStage >= $total || $summaryStage === 0) {
+            // Return all items unsummarized
+            if ($total === 1) return $items[0];
+            if ($total === 2) return $items[0] . ' and ' . $items[1];
+
+            $allButLast = array_slice($items, 0, -1);
+            $last = $items[$total - 1];
+            return implode(', ', $allButLast) . ' and ' . $last;
+        }
+
+        // Summarize
+        $listed = array_slice($items, 0, $summaryStage);
+        $othersCount = $total - $summaryStage;
+        return implode(', ', $listed) . ' and ' . $othersCount . ' other' . ($othersCount > 1 ? 's' : '');
+    }
+
 }

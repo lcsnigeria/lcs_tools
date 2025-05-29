@@ -1,6 +1,8 @@
 <?php
 namespace LCSNG_EXT\FileManagement;
 
+use LCSNG_EXT\FileManagement\LCS_FileComponents;
+
 /**
  * Class LCS_FileManager
  *
@@ -155,6 +157,32 @@ class LCS_FileManager {
     public $file_limit = 10;
 
     /**
+     * @var int $max_file_size
+     * The maximum file size allowed for uploads in bytes.
+     * Default value is `1024 * 1024 * 100` (100 MB).
+     * Users can override this value to set a specific file size limit.
+     *
+     * Example:
+     * ```php
+     * $fileManager->max_file_size = 1024 * 1024 * 50; // Set limit to 50 MB
+     * ```
+     */
+    public $max_file_size = 1024 * 1024 * 100; // 100 MB
+
+    /**
+     * @var int $min_file_size
+     * The minimum file size allowed for uploads in bytes.
+     * Default value is `0` (no minimum size).
+     * Users can override this value to set a specific file size limit.
+     *
+     * Example:
+     * ```php
+     * $fileManager->min_file_size = 1024 * 1024; // Set limit to 1 MB
+     * ```
+     */
+    public $min_file_size = 0; // 0 MB
+
+    /**
      * @var int $time_limit
      * Defines the maximum execution time for file operations.
      * - Default is `0` (no limit).
@@ -179,6 +207,13 @@ class LCS_FileManager {
      */
     public $overwrite = false;
 
+    /**
+     * @var bool $mark_valid
+     * Indicates whether to validate the MIME type of the uploaded file.
+     * If true, the file's MIME type will be checked against the allowed types.
+     * If false, all files will be accepted regardless of their MIME type.
+     */
+    public $mark_valid = false;
 
     /**
      * @var int $previous_time_limit
@@ -196,7 +231,7 @@ class LCS_FileManager {
      * @param int|null $time_limit Optional. Custom execution time limit in seconds.
      *                             If not provided, the `$time_limit` property will be used.
      */
-    public function __construct(int $time_limit = null)
+    public function __construct(int|null $time_limit = null)
     {
         // Store the current max execution time
         $this->previous_time_limit = ini_get('max_execution_time');
@@ -260,15 +295,17 @@ class LCS_FileManager {
         // Default valid MIME types
         $validMimeTypes = self::$validMimeTypes;
 
+        $allMimeTypes = LCS_FileComponents::allFileMimeTypes();
+
         if (!empty($this->file_types)) {
             $providedFileTypes = is_string($this->file_types) || !is_array($this->file_types) 
                 ? (array) $this->file_types 
                 : $this->file_types;
 
-            // Check if any provided file types are not in the default valid list
-            $invalidFileTypes = array_diff($providedFileTypes, $validMimeTypes);
+            // Check if any provided file types are not in the list of all MIME types
+            $invalidFileTypes = array_diff($providedFileTypes, $allMimeTypes);
             if (!empty($invalidFileTypes)) {
-                throw new \Exception("Invalid file types detected: " . implode(', ', $invalidFileTypes) . '. Check the class allowed file types in the documentation.');
+                throw new \Exception("Invalid file types detected: " . implode(', ', $invalidFileTypes) . '. Check the class list of file types in the documentation.');
             }
 
             // Validate the provided MIME type only against the custom defined file_types
@@ -277,6 +314,52 @@ class LCS_FileManager {
 
         // Validate the provided MIME type
         return in_array($mime_type, $validMimeTypes, true);
+    }
+
+    /**
+     * Validates the file size of the uploaded file(s).
+     *
+     * This method checks if the file size is within the specified limits.
+     * If no file is provided, it uses the default file from the class properties.
+     *
+     * @param string|array|null $file The file or array of files to validate.
+     * @param int|null $min_file_size The minimum file size in bytes. Default is null (no minimum).
+     * @param int|null $max_file_size The maximum file size in bytes. Default is null (no maximum).
+     * @throws \Exception If the file size is out of bounds or invalid.
+     */
+    public function validateFileSize($file = null, $min_file_size = null, $max_file_size = null) {
+        if (is_null($file) || empty($file)) {
+            if ($this->file) {
+                $file = $this->file;
+            } elseif ($this->file_path) {
+                $file = $this->file_path;
+            } else {
+                throw new \Exception("No file parameter provided and no default file available.");
+            }
+        }
+
+        // Check if the file size is within the specified limits
+        if (is_array($file)) {
+            $file = $this->normalizeFiles($file);
+            foreach ($file as $f) {
+                if (!isset($f['size'])) {
+                    throw new \Exception("Invalid file array provided.");
+                }
+                if ($f['size'] < ($min_file_size ?? $this->min_file_size) || $f['size'] > ($max_file_size ?? $this->max_file_size)) {
+                    throw new \Exception("File size out of bounds: " . $f['name']);
+                }
+            }
+        } elseif (is_string($file)) {
+            if (!file_exists($file)) {
+                throw new \Exception("File does not exist: " . $file);
+            }
+            $fileSize = filesize($file);
+            if ($fileSize < ($min_file_size ?? $this->min_file_size) || $fileSize > ($max_file_size ?? $this->max_file_size)) {
+                throw new \Exception("File size out of bounds: " . basename($file));
+            }
+        } else {
+            throw new \Exception("Invalid file parameter provided.");
+        }
     }
 
     /**
@@ -351,13 +434,24 @@ class LCS_FileManager {
     /**
      * Uploads multiple files to the specified directory based on their purpose.
      *
-     * @return array The paths of the uploaded files.
+     * @return array The names of the uploaded files.
      * @throws Exception If any file is invalid or an upload fails.
      */
-    public function upload() :array {
+    public function upload($forceConfigs = false) :array {
         // Check if path is provided and valid
-        if (empty($this->path) || !is_dir($this->path) || !is_writable($this->path)) {
-            throw new \Exception("Invalid or unwritable path provided.");
+        if (empty($this->path)) {
+            throw new \Exception("No path provided.");
+        }
+        if (!is_dir($this->path)) {
+            if (!$forceConfigs) {
+                throw new \Exception("Path is not a directory: {$this->path}");
+            }
+            if (!mkdir($this->path, 0775, true)) {
+                throw new \Exception("Failed to create directory: {$this->path}");
+            }
+        }
+        if (!is_writable($this->path)) {
+            throw new \Exception("Path is not writable: {$this->path}");
         }
     
         // Update time limit for this upload process
@@ -376,7 +470,10 @@ class LCS_FileManager {
         }
 
         $uploadedFiles = [];
+        $interationCounter = 0;
         foreach ($files as $file) {
+            ++$interationCounter;
+
             if (empty($file['name']) || $file['error'] !== UPLOAD_ERR_OK) {
                 throw new \Exception("Invalid file provided: " . ($file['name'] ?? 'unknown'));
             }
@@ -386,12 +483,18 @@ class LCS_FileManager {
             }
 
             // Validate MIME type using Fileinfo
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime_type = finfo_file($finfo, $file['tmp_name']);
-            finfo_close($finfo);
+            if (!$this->mark_valid) {
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mime_type = finfo_file($finfo, $file['tmp_name']);
+                finfo_close($finfo);
+                if (!$this->isValidMimeType($mime_type)) {
+                    throw new \Exception("Invalid file type specified for file: " . $file['name']);
+                }
+            }
 
-            if (!$this->isValidMimeType($mime_type)) {
-                throw new \Exception("Invalid file type specified for file: " . $file['name']);
+            // Validate file size
+            if (!$this->mark_valid) {
+                $this->validateFileSize($file);
             }
 
             // Determine the target directory
@@ -405,31 +508,39 @@ class LCS_FileManager {
             }
 
             // If $file_name not set; Generate a unique filename to avoid overwriting
-            $filename = pathinfo($file['name'], PATHINFO_FILENAME) . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
+            $fileName = pathinfo($file['name'], PATHINFO_FILENAME);
+            $fileExtension = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $newfileName = "{$fileName}.{$fileExtension}";
             if ($this->rename) {
-                $filename = $this->file_name ?? 'lcs_file_' . time() . '_' . uniqid() . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
+                if (!empty($this->file_name)) {
+                    $newfileName = $this->file_name . '___' . "{$interationCounter}.{$fileExtension}";
+                } else {
+                    $newfileName = 'lcs_file_' . time() . '_' . uniqid() . '.' . $fileExtension;
+                }
             }
+            // For a custom name, reset the first file name to normal; e.g. cat___1.jpeg to cat.jpeg
+            $newfileName = preg_replace('/___1\.' . preg_quote($fileExtension, '/') . '$/', '.' . $fileExtension, $newfileName);
 
             // Check if the file already exists in the target directory
             // Then check if overwrite is enabled, set the file path and delete the existing file before proceeding
             // Else, throw an exception if overwrite is disabled and the file exists
-            if ($this->isFileExist($filename, $targetDirectory)) {
+            if ($this->isFileExist($newfileName, $targetDirectory)) {
                 if ($this->overwrite) {
-                    $this->file_path = $targetDirectory . $filename;
+                    $this->file_path = $targetDirectory . $newfileName;
                     $this->delete();
                 } else {
-                    throw new \Exception("File '{$filename}' already exists in '{$targetDirectory}'. Either delete it manually or enable overwriting.");
+                    throw new \Exception("File '{$newfileName}' already exists in '{$targetDirectory}'. Either delete it manually or enable overwriting.");
                 }
             }
 
-            $targetFile = $targetDirectory . $filename;
+            $targetFile = $targetDirectory . $newfileName;
 
             // Move the file to the target directory
             if (!move_uploaded_file($file['tmp_name'], $targetFile)) {
                 throw new \Exception("Error moving uploaded file: " . $file['name']);
             }
 
-            $uploadedFiles[] = $targetFile;
+            $uploadedFiles[] = $newfileName;
         }
 
         return $uploadedFiles;

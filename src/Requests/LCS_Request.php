@@ -51,6 +51,7 @@ class LCS_Request
      * Note: Query parameters are included unless $stripQueryArgs is set to true.
      *
      * @param int|string $position The segment index (0-based) or special keywords 'start' or 'end'.
+     * @param string|null $uri Optional. The URI to extract the segment from. If null, uses the current request URI.
      * @param bool $stripQueryArgs Optional. Whether to strip query parameters before extracting segments.
      * @return string|false The segment value, or false if not found.
      *
@@ -61,11 +62,12 @@ class LCS_Request
      * $this->get_uri_path_name(1); // "item"
      * $this->get_uri_path_name('start'); // "products"
      * $this->get_uri_path_name('end'); // "view?id=123"
-     * $this->get_uri_path_name(2, true); // "view" (query args stripped)
+     * $this->get_uri_path_name(2, null, true); // "view"
+     * $this->get_uri_path_name(3, "/products/item/view?id=123", true); // false
      */
-    public function get_uri_path_name(int|string $position = 0, bool $stripQueryArgs = false)
+    public function get_uri_path_name(int|string $position = 0, ?string $uri = null, bool $stripQueryArgs = false)
     {
-        $uri = $this->get_uri($stripQueryArgs);
+        $uri = empty($uri) ? $this->get_uri($stripQueryArgs) : $uri;
 
         $allowed_string_position = ['start', 'end'];
         if (!is_numeric($position) && !in_array($position, $allowed_string_position, true)) {
@@ -806,6 +808,136 @@ class LCS_Request
         $parsedUrl = parse_url($url);
 
         return isset($parsedUrl['query']) && !empty($parsedUrl['query']) ? $parsedUrl['query'] : null;
+    }
+
+    /**
+     * Checks if a given URL is accessible by sending an HTTP HEAD request.
+     * 
+     * @param string $url - The URL to be checked for accessibility.
+     * @return bool - Returns true if the URL is accessible, otherwise false.
+     */
+    public function is_url_accessible($url) {
+        // Automatically return false for URLs containing 'example.com'
+        if (str_contains($url, 'example.com')) {
+            return false;
+        }
+
+        // Retrieve HTTP headers for the given URL
+        $headers = @get_headers($url);
+
+        // If headers are not retrieved, return false
+        if ($headers === false) {
+            return false;
+        }
+
+        // Get the status code from the first header (e.g., "HTTP/1.1 200 OK")
+        $status_code = substr($headers[0], 9, 3);
+
+        // Check if the status code is 200 (OK), 301 (Moved Permanently), or 302 (Found)
+        if (in_array($status_code, ['200', '301', '302'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if a given string contains a URL protocol (http, https, ftp, etc.).
+     *
+     * @param string $string The string to check.
+     * @return bool True if a protocol is present, false otherwise.
+     */
+    public function contains_url_protocol(string $string): bool
+    {
+        $parsedURL = parse_url($string);
+        return isset($parsedURL['scheme']) && !empty($parsedURL['scheme']);
+    }
+
+    /**
+     * Checks if a given string contains a valid host (domain or IP address).
+     *
+     * This function attempts to extract the host from a URL or domain string and validates
+     * whether it is a valid domain name or IP address.
+     *
+     * @param string $string The string to check.
+     * @return bool True if a valid host is found, false otherwise.
+     */
+    public function contains_url_host(string $string): bool
+    {
+        // Prepend protocol if missing to help parse_url
+        if (!preg_match('#^https?://#i', $string)) {
+            $string = 'http://' . $string;
+        }
+        $host = parse_url($string, PHP_URL_HOST);
+
+        if (empty($host)) {
+            return false;
+        }
+
+        // Check if host is a valid domain or IP address
+        if (filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false) {
+            return true;
+        }
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if a given string contains a valid top-level domain (TLD).
+     *
+     * First attempts to match against a list of known TLDs.
+     * If not found, falls back to checking if the TLD is exactly 2 characters (ccTLD).
+     *
+     * @param string $string The string to check (e.g., a domain or URL).
+     * @return bool True if a valid TLD is found, false otherwise.
+     */
+    public function contains_url_tld(string $string): bool
+    {
+        // List of common TLDs (expanded but not exhaustive)
+        $tlds = [
+            // Original TLDs
+            'com', 'net', 'org', 'edu', 'gov', 'mil', 'int', 'io', 'co', 'us', 'uk', 'de', 'jp', 'fr', 'au', 'ca',
+            'cn', 'ru', 'ch', 'it', 'nl', 'se', 'no', 'es', 'biz', 'info', 'me', 'tv', 'xyz', 'site', 'online', 'ng',
+            // Additional generic TLDs
+            'app', 'blog', 'club', 'dev', 'shop', 'store', 'tech', 'work', 'art', 'design', 'guru', 'live', 'news',
+            'pro', 'space', 'world', 'email', 'solutions', 'cloud', 'digital', 'media', 'travel', 'fun', 'team',
+            // Additional country-code TLDs
+            'br', 'in', 'mx', 'za', 'sg', 'kr', 'nz', 'ie', 'dk', 'fi', 'be', 'at', 'pl', 'tr', 'ar', 'cl', 'co',
+            'id', 'my', 'ph', 'sa', 'ae', 'th', 'vn', 'eg', 'ke', 'ma', 'pt', 'gr', 'hu', 'cz', 'ro',
+            // Sponsored and niche TLDs
+            'mobi', 'tel', 'name', 'asia', 'jobs', 'museum', 'aero', 'coop', 'cat', 'post', 'xxx',
+            // Brand and community TLDs
+            'google', 'apple', 'aws', 'microsoft', 'icu', 'top', 'win', 'vip', 'link', 'page'
+        ];
+
+        // Extract the host from the string if it's a URL
+        if (!preg_match('#^https?://#i', $string)) {
+            $string = 'http://' . $string;
+        }
+        $host = parse_url($string)['host'] ?? null;
+        if (empty($host)) {
+            return false;
+        }
+
+        // Extract the last domain segment (TLD) after the last dot
+        if (preg_match('/\.([a-z0-9\-]{2,})$/i', $host, $matches)) {
+            $tld = strtolower($matches[1]);
+
+            // Check if it exists in the known TLDs list
+            if (in_array($tld, $tlds, true)) {
+                return true;
+            }
+
+            // Fallback: check if it's a valid ccTLD (exactly 2 letters)
+            if (preg_match('/^[a-z]{2}$/i', $tld)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

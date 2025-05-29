@@ -1,11 +1,11 @@
 {
-    "name": "lcsng/external",
-    "description": "External library for the LCS platforms management.",
+    "name": "lcsng/tools",
+    "description": "External library for the LCS platforms management and for others.",
     "type": "library",
     "license": "proprietary",
     "autoload": {
         "psr-4": {
-            "LCSNG_EXT\\": "src/"
+            "lcsTools\\": "src/"
         }
     },
     "require": {
