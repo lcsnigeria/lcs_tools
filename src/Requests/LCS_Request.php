@@ -24,72 +24,6 @@ class LCS_Request
     }
 
     /**
-     * Retrieves the full URI of the current request.
-     *
-     * @param bool $stripQueryArgs Whether to remove query parameters from the URI.
-     * @return string The request URI.
-     * 
-     * @example
-     * // Example usage:
-     * $this->get_uri(); // "/products/item?id=123"
-     * $this->get_uri(true); // "/products/item"
-     */
-    public function get_uri(bool $stripQueryArgs = false)
-    {
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
-
-        if ($stripQueryArgs) {
-            $uri = explode('?', $uri)[0];
-        }
-
-        return $uri;
-    }
-
-    /**
-     * Retrieves a specific segment of the URI path.
-     *
-     * Note: Query parameters are included unless $stripQueryArgs is set to true.
-     *
-     * @param int|string $position The segment index (0-based) or special keywords 'start' or 'end'.
-     * @param string|null $uri Optional. The URI to extract the segment from. If null, uses the current request URI.
-     * @param bool $stripQueryArgs Optional. Whether to strip query parameters before extracting segments.
-     * @return string|false The segment value, or false if not found.
-     *
-     * @throws \Exception If an invalid position value is provided.
-     *
-     * @example
-     * // Example URL: "/products/item/view?id=123"
-     * $this->get_uri_path_name(1); // "item"
-     * $this->get_uri_path_name('start'); // "products"
-     * $this->get_uri_path_name('end'); // "view?id=123"
-     * $this->get_uri_path_name(2, null, true); // "view"
-     * $this->get_uri_path_name(3, "/products/item/view?id=123", true); // false
-     */
-    public function get_uri_path_name(int|string $position = 0, ?string $uri = null, bool $stripQueryArgs = false)
-    {
-        $uri = empty($uri) ? $this->get_uri($stripQueryArgs) : $uri;
-
-        $allowed_string_position = ['start', 'end'];
-        if (!is_numeric($position) && !in_array($position, $allowed_string_position, true)) {
-            throw new \Exception(
-                "Invalid position value. Must be numeric or one of: " . implode(', ', $allowed_string_position)
-            );
-        }
-
-        $pathSegments = explode('/', trim($uri, '/'));
-
-        if ($position === 'start') {
-            $position = 0;
-        } elseif ($position === 'end') {
-            $position = count($pathSegments) - 1;
-        } else {
-            $position = (int) $position;
-        }
-
-        return $pathSegments[$position] ?? false;
-    }
-
-    /**
      * Sets a request variable.
      *
      * @param string $key The request variable name.
@@ -753,7 +687,73 @@ class LCS_Request
         }
     
         header($allowedHeaders[$header] . ': ' . $value, $replace, $http_response_code);
-    }    
+    }
+    
+    /**
+     * Retrieves the full URI of the current request.
+     *
+     * @param bool $stripQueryArgs Whether to remove query parameters from the URI.
+     * @return string The request URI.
+     * 
+     * @example
+     * // Example usage:
+     * $this->get_uri(); // "/products/item?id=123"
+     * $this->get_uri(true); // "/products/item"
+     */
+    public function get_uri(bool $stripQueryArgs = false)
+    {
+        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+
+        if ($stripQueryArgs) {
+            $uri = explode('?', $uri)[0];
+        }
+
+        return $uri;
+    }
+
+    /**
+     * Retrieves a specific segment of the URI path.
+     *
+     * Note: Query parameters are included unless $stripQueryArgs is set to true.
+     *
+     * @param int|string $position The segment index (0-based) or special keywords 'start' or 'end'.
+     * @param string|null $uri Optional. The URI to extract the segment from. If null, uses the current request URI.
+     * @param bool $stripQueryArgs Optional. Whether to strip query parameters before extracting segments.
+     * @return string|false The segment value, or false if not found.
+     *
+     * @throws \Exception If an invalid position value is provided.
+     *
+     * @example
+     * // Example URL: "/products/item/view?id=123"
+     * $this->get_uri_path_name(1); // "item"
+     * $this->get_uri_path_name('start'); // "products"
+     * $this->get_uri_path_name('end'); // "view?id=123"
+     * $this->get_uri_path_name(2, null, true); // "view"
+     * $this->get_uri_path_name(3, "/products/item/view?id=123", true); // false
+     */
+    public function get_uri_path_name(int|string $position = 0, ?string $uri = null, bool $stripQueryArgs = false)
+    {
+        $uri = empty($uri) ? $this->get_uri($stripQueryArgs) : $uri;
+
+        $allowed_string_position = ['start', 'end'];
+        if (!is_numeric($position) && !in_array($position, $allowed_string_position, true)) {
+            throw new \Exception(
+                "Invalid position value. Must be numeric or one of: " . implode(', ', $allowed_string_position)
+            );
+        }
+
+        $pathSegments = explode('/', trim($uri, '/'));
+
+        if ($position === 'start') {
+            $position = 0;
+        } elseif ($position === 'end') {
+            $position = count($pathSegments) - 1;
+        } else {
+            $position = (int) $position;
+        }
+
+        return $pathSegments[$position] ?? false;
+    }
 
     /**
      * Retrieves the current URL of the request.
@@ -791,6 +791,27 @@ class LCS_Request
     }
 
     /**
+     * Retrieves the HTTP referer URL, or falls back to the current request URL if not available.
+     *
+     * This method returns the value of the HTTP_REFERER server variable if set and not empty.
+     * If the referer is not available, it falls back to the current request URL.
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned URL.
+     * @param bool $isolateAjaxEffects Whether to prioritize HTTP referer during AJAX requests to reflect the real source page.
+     * @return string The referer URL or the current request URL as a fallback.
+     */
+    public function get_referer_url(bool $includeProtocol = false, bool $isolateAjaxEffects = true)
+    {
+        // Check if the HTTP_REFERER server variable is set and not empty
+        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+            return $_SERVER['HTTP_REFERER'];
+        }
+
+        // Fallback to the current URL if the referer is not set or is empty
+        return $this->get_url($includeProtocol, $isolateAjaxEffects);
+    }
+
+    /**
      * Extracts the query string from a given URL or $this->get_url(true).
      *
      * This function takes a URL and returns the query string portion,
@@ -808,6 +829,39 @@ class LCS_Request
         $parsedUrl = parse_url($url);
 
         return isset($parsedUrl['query']) && !empty($parsedUrl['query']) ? $parsedUrl['query'] : null;
+    }
+
+    /**
+     * Retrieves the site's domain name.
+     *
+     * This function returns the current domain, with an option to include
+     * the protocol (http or https). It excludes any URI paths or query strings.
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned domain. Default is false.
+     * @return string The domain name, optionally prefixed with the protocol.
+     */
+    public function get_domain(bool $includeProtocol = false): string
+    {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        $domain = $includeProtocol ? ($protocol . $host) : $host;
+
+        return trim($domain);
+    }
+
+    /**
+     * Retrieves the site's host name.
+     *
+     * This function uses the get_domain method to return the host name,
+     * optionally including the protocol (http/https).
+     *
+     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned host. Default is false.
+     * @return string The host name, optionally prefixed with the protocol.
+     */
+    public function get_host(bool $includeProtocol = false): string
+    {
+        return $this->get_domain($includeProtocol);
     }
 
     /**
@@ -938,39 +992,6 @@ class LCS_Request
         }
 
         return false;
-    }
-
-    /**
-     * Retrieves the site's domain name.
-     *
-     * This function returns the current domain, with an option to include
-     * the protocol (http or https). It excludes any URI paths or query strings.
-     *
-     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned domain. Default is false.
-     * @return string The domain name, optionally prefixed with the protocol.
-     */
-    public function get_domain(bool $includeProtocol = false): string
-    {
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-
-        $domain = $includeProtocol ? ($protocol . $host) : $host;
-
-        return trim($domain);
-    }
-
-    /**
-     * Retrieves the site's host name.
-     *
-     * This function uses the get_domain method to return the host name,
-     * optionally including the protocol (http/https).
-     *
-     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned host. Default is false.
-     * @return string The host name, optionally prefixed with the protocol.
-     */
-    public function get_host(bool $includeProtocol = false): string
-    {
-        return $this->get_domain($includeProtocol);
     }
 
     /**
