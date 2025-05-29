@@ -1,11 +1,11 @@
 <?php
-namespace LCSNG_EXT\FileManagement;
+namespace lcsTools\FileManagement;
 
 /**
  * LCS_FileComponents class provides a comprehensive list of file extensions and MIME types.
  * This class is designed to assist in file validation, categorization, and processing.
  *
- * @package LCSNG_EXT\FileManagement
+ * @package lcsTools\FileManagement
  * @version 1.0.0
  */
 class LCS_FileComponents 

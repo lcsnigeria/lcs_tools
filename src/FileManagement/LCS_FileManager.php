@@ -1,7 +1,7 @@
 <?php
-namespace LCSNG_EXT\FileManagement;
+namespace lcsTools\FileManagement;
 
-use LCSNG_EXT\FileManagement\LCS_FileComponents;
+use lcsTools\FileManagement\LCS_FileComponents;
 
 /**
  * Class LCS_FileManager

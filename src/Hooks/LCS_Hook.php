@@ -1,7 +1,7 @@
 <?php
-namespace LCSNG_EXT\Hooks;
+namespace lcsTools\Hooks;
 
-use LCSNG_EXT\Hooks\LCS_HookConfig;
+use lcsTools\Hooks\LCS_HookConfig;
 
 final class LCS_Hook extends LCS_HookConfig {
 

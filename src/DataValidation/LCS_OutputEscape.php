@@ -1,12 +1,12 @@
 <?php
-namespace LCSNG_EXT\DataValidation;
+namespace lcsTools\DataValidation;
 
 /**
  * Class LCS_OutputEscape
  *
  * Provides methods for escaping data retrieved from the database/app before outputting it to the user.
  *
- * @package LCSNG_EXT\DataValidation
+ * @package lcsTools\DataValidation
  */
 class LCS_OutputEscape
 {

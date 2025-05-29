@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Database;
+namespace lcsTools\Database;
 
 /**
  * Class LCS_DBManager

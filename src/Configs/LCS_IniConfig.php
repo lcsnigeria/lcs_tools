@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Configs;
+namespace lcsTools\Configs;
 
 class LCS_IniConfig {
 

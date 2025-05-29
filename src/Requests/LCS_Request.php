@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Requests;
+namespace lcsTools\Requests;
 
 /**
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 

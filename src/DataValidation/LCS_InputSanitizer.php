@@ -1,12 +1,12 @@
 <?php
-namespace LCSNG_EXT\DataValidation;
+namespace lcsTools\DataValidation;
 
 /**
  * Class LCS_InputSanitizer
  *
  * Provides methods for sanitizing user input and preparing data for database storage.
  *
- * @package LCSNG_EXT\DataValidation
+ * @package lcsTools\DataValidation
  */
 class LCS_InputSanitizer
 {

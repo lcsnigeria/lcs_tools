@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Mailing;
+namespace lcsTools\Mailing;
 
 // Import PHPMailer classes into the global namespace
 use PHPMailer\PHPMailer\PHPMailer;

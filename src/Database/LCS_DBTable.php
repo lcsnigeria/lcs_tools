@@ -1,7 +1,7 @@
 <?php
-namespace LCSNG_EXT\Database;
+namespace lcsTools\Database;
 
-use LCSNG_EXT\Database\LCS_DBManager;
+use lcsTools\Database\LCS_DBManager;
 
 class LCS_DBTable extends LCS_DBManager 
 {

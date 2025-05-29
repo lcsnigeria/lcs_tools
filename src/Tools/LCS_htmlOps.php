@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Tools;
+namespace lcsTools\Tools;
 
 /**
  * Class LCS_htmlOps

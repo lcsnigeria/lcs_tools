@@ -1,5 +1,5 @@
 <?php
-namespace LCSNG_EXT\Tools;
+namespace lcsTools\Tools;
 
 /**
  * Class TemplateTools
@@ -7,7 +7,7 @@ namespace LCSNG_EXT\Tools;
  * Provides methods for generating and outputting HTML meta tags, Open Graph (OG) tags,
  * Twitter Card metadata, JSON-LD structured data, and other metadata elements for a web page.
  *
- * @package LCSNG_EXT\Tools
+ * @package lcsTools\Tools
  */
 class LCS_TemplateTools
 {
