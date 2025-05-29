@@ -8,8 +8,8 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
 {
     public static $files = array (
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
-        '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
+        '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
         '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
         '1f87db08236948d07391152dccb70f04' => __DIR__ . '/..' . '/google/apiclient-services/autoload.php',
@@ -23,6 +23,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'p' => 
         array (
             'phpseclib3\\' => 11,
+        ),
+        'l' => 
+        array (
+            'lcsTools\\' => 9,
         ),
         'S' => 
         array (
@@ -55,7 +59,6 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'L' => 
         array (
             'League\\Uri\\' => 11,
-            'LCSNG_EXT\\' => 10,
         ),
         'J' => 
         array (
@@ -90,6 +93,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'phpseclib3\\' => 
         array (
             0 => __DIR__ . '/..' . '/phpseclib/phpseclib/phpseclib',
+        ),
+        'lcsTools\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/src',
         ),
         'Symfony\\Polyfill\\Php80\\' => 
         array (
@@ -172,10 +179,6 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         array (
             0 => __DIR__ . '/..' . '/league/uri',
             1 => __DIR__ . '/..' . '/league/uri-interfaces',
-        ),
-        'LCSNG_EXT\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/src',
         ),
         'Jose\\Component\\' => 
         array (
