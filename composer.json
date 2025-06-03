@@ -11,12 +11,13 @@
     "require": {
         "php": "^8.3",
         "vlucas/phpdotenv": "^5.6",
-        "phpmailer/phpmailer": "^6.8",
         "scssphp/scssphp": "^2.0",
         "symfony/error-handler": "^6.2",
         "minishlink/web-push": "^9.0",
         "google/apiclient": "^2.11",
-        "web-token/jwt-library": "^4.0"
+        "web-token/jwt-library": "^4.0",
+        "symfony/mailer": "^7.3",
+        "symfony/http-client": "^7.3"
     },
     "config": {
         "allow-plugins": {

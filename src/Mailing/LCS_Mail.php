@@ -1,320 +1,276 @@
 <?php
 namespace lcsTools\Mailing;
 
-// Import PHPMailer classes into the global namespace
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+use Symfony\Component\Mailer\Mailer;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
+use Symfony\Component\Mime\Email;
 
 /**
- * Class LCS_Mail
- * 
- * A utility class for sending emails using PHPMailer with support for custom headers, 
- * attachments, and predefined configurations.
+ * Class LCS_Mail 
+ *
+ * A utility class for sending emails using Symfony Mailer. Supports:
+ *  - SMTP transport with STARTTLS or SMTPS
+ *  - Custom “From” and “Reply-To” headers (fallbacks provided)
+ *  - Arbitrary additional headers (e.g. X-Custom-Header)
+ *  - HTML body with plain-text alternative
+ *  - Multiple attachments
+ *
+ * Usage example:
+ * ```php
+ * // 1) Instantiate with SMTP credentials:
+ * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'secret', 587);
+ *
+ * // 2) Send a simple message:
+ * $sent = $mailer->send(
+ *     'recipient@example.com:Recipient Name',
+ *     'Test Email 🚀',
+ *     '<p>Hello <b>world</b>!</p>',
+ *     [
+ *         'From: Acme App <no-reply@acme.local>',
+ *         'Reply-To: support@acme.local',
+ *         'X-Priority: 1 (Highest)',
+ *     ],
+ *     ['/path/to/attach1.pdf', '/path/to/attach2.png']
+ * );
+ *
+ * if ($sent) {
+ *     echo "Email was queued/sent successfully.\n";
+ * } else {
+ *     echo "Failed to send email.\n";
+ * }
+ * ```
  */
 class LCS_Mail
 {
-    public $host;
-    public $username;
-    public $password;
+    /** @var string SMTP host (e.g. "smtp.example.com") */
+    private $host;
 
-    private $port = 587;
-    private $mailer;
+    /** @var string SMTP username (login) */
+    private $username;
+
+    /** @var string SMTP password */
+    private $password;
+
+    /** @var int SMTP port (e.g. 587, 465, 25) */
+    private $port;
+
+    /** @var string Encrypt method: 'tls' or 'ssl' */
+    private $encryption;
+
+    /** @var Mailer */
+    private $symfonyMailer;
 
     /**
      * Constructor.
-     * 
-     * Initializes the PHPMailer instance and loads email configuration.
+     *
+     * Initializes Symfony Mailer with an SMTP DSN built from the provided parameters.
+     *
+     * @param string $host       SMTP hostname (e.g. "smtp.gmail.com").
+     * @param string $username   SMTP username (often your full email address).
+     * @param string $password   SMTP password or API token.
+     * @param int    $port       SMTP port (587 for STARTTLS, 465 for SMTPS, 25 for plain/TLS).
+     * @param string $encryption Either 'tls' (STARTTLS) or 'ssl' (SMTPS). Defaults to 'tls'.
+     *
+     * @throws \InvalidArgumentException If $port/encryption combination is unsupported.
      */
-    public function __construct( $HOST, $USERNAME, $PASSWORD )
+    public function __construct(string $host, string $username, string $password, int $port = 587, string $encryption = 'tls')
     {
-        $this->mailer = new PHPMailer(true);
-        $this->host = $HOST;
-        $this->username = $USERNAME;
-        $this->password = $PASSWORD;
+        $this->host       = $host;
+        $this->username   = $username;
+        $this->password   = $password;
+        $this->port       = $port;
+        $this->encryption = $encryption;
 
-        $this->initializeMailer();
-    }
-
-    /**
-     * Initializes the PHPMailer settings.
-     */
-    private function initializeMailer()
-    {
-        try {
-            $this->mailer->isSMTP();
-            $this->mailer->Host = $this->host;
-            $this->mailer->SMTPAuth = true;
-            $this->mailer->Username = $this->username;
-            $this->mailer->Password = $this->password;
-            $this->mailer->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $this->mailer->Port = $this->port;
-            $this->mailer->CharSet = 'UTF-8';
-        } catch (Exception $e) {
-            trigger_error("Mailer initialization failed: {$e->getMessage()}");
+        // Build DSN: "smtp://USERNAME:PASSWORD@HOST:PORT?encryption=ssl_or_tls"
+        // Note: if using SMTPS (port 465), encryption=ssl. If STARTTLS (port 587 or 25), encryption=tls.
+        $allowedEncrypt = ['tls', 'ssl'];
+        if (!in_array($encryption, $allowedEncrypt, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unsupported encryption "%s". Use "tls" or "ssl".',
+                $encryption
+            ));
         }
+
+        // Compose the DSN string:
+        // - prefix "smtp://" always, even if encryption=ssl or tls
+        // - embed username/password (URL-encoded)
+        $dsn = sprintf(
+            'smtp://%s:%s@%s:%d?encryption=%s',
+            rawurlencode($username),
+            rawurlencode($password),
+            $host,
+            $port,
+            $encryption
+        );
+
+        // Create Transport and Mailer:
+        $transport = Transport::fromDsn($dsn);
+        $this->symfonyMailer = new Mailer($transport);
     }
 
     /**
-     * Switches the SMTP port and adjusts the encryption method accordingly.
-     * 
-     * This method updates the PHPMailer instance to use a different SMTP port and
-     * automatically configures the appropriate encryption protocol based on the selected port.
-     * 
-     * Supported ports and their encryption methods:
-     * - 587 => ENCRYPTION_STARTTLS
-     * - 465 => ENCRYPTION_SMTPS
-     * - 25  => ENCRYPTION_STARTTLS
-     * 
-     * If an unsupported port is provided, an Exception will be thrown.
-     * 
-     * @param int $port The SMTP port to switch to (e.g., 587, 465, 25).
-     * 
-     * @throws Exception if an unsupported port is specified.
-     * 
-     * Usage Example:
-     * 
-     * ```php
-     * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'password');
-     * $mailer->switchPort(465); // Switch to port 465 using SMTPS encryption
-     * ```
+     * Sends a single email.
+     *
+     * This method builds a Symfony\Component\Mime\Email object, sets:
+     *  - From (default = $this->username, “LCS Official”)
+     *  - Reply-To (default = “no-reply@lcs.ng”, “LCS Official”)
+     *  - To (parsed from $to; format: "email:Name" or just "email")
+     *  - Subject
+     *  - HTML body
+     *  - Plain-text alt body (strip_tags of HTML)
+     *  - Custom headers (any “X-…” or additional “From:” or “Reply-To:” if present)
+     *  - Attachments (one or many file paths)
+     *
+     * If any header “From:” or “Reply-To:” is provided in the $headers array, it overrides the defaults.
+     *
+     * @param string          $to           Recipient address, optionally with name: "email@example.com:Recipient Name".
+     * @param string          $subject      Email subject line.
+     * @param string          $htmlBody     HTML content of the email.
+     * @param string|string[] $headers      (Optional) One or more headers like "X-Custom-Header: Value".
+     *                                      May include "From: ..." or "Reply-To: ..." to override defaults.
+     * @param string|string[] $attachments  (Optional) File path or array of file paths to attach.
+     *
+     * @return bool  Returns true if the mailer did not throw any exception.
+     *
+     * @throws \InvalidArgumentException If recipient email is invalid or an attachment path does not exist.
      */
-    public function switchPort(int $port) 
+    public function send(string $to, string $subject, string $htmlBody, $headers = '', $attachments = ''): bool
     {
-        $encryptData = [
-            587 => PHPMailer::ENCRYPTION_STARTTLS,
-            465 => PHPMailer::ENCRYPTION_SMTPS,
-            25  => PHPMailer::ENCRYPTION_STARTTLS,
-        ];
+        // 1) Normalize headers and attachments into arrays
+        $headersArray    = is_array($headers) ? $headers : (strlen(trim($headers)) > 0 ? [ $headers ] : []);
+        $attachmentsList = is_array($attachments) ? $attachments : (strlen(trim($attachments)) > 0 ? [ $attachments ] : []);
 
-        if (array_key_exists($port, $encryptData)) {
-            $this->port = $port;
-            $this->mailer->SMTPSecure = $encryptData[$port];
-            $this->mailer->Port = $port;
-        } else {
-            throw new Exception("Unsupported port: {$port}. Please use a valid port (e.g., 587, 465, 25).");
+        // 2) Parse recipient (email + optional name)
+        list($recipientEmail, $recipientName) = $this->parseRecipient($to);
+
+        // 3) Build Email object
+        $email = (new Email())
+            ->to($recipientEmail, $recipientName)
+            ->subject($subject)
+            ->html($htmlBody)
+            ->text(strip_tags($htmlBody));
+
+        // 4) Determine default “From” and “Reply-To”
+        $fromAddress    = [ $this->username => 'LCS Official' ];
+        $replyToAddress = [ 'no-reply@lcs.ng' => 'LCS Official' ];
+
+        // 5) Process headersArray: if any “From:” or “Reply-To:”, override defaults; otherwise, collect as X-Headers
+        foreach ($headersArray as $rawHeader) {
+            $lower = strtolower($rawHeader);
+            if (strpos($lower, 'from:') === 0) {
+                // Format: "From: Name <email@example.com>" or "From: email@example.com:Name"
+                $parsed = $this->extractHeaderAddress(substr($rawHeader, 5));
+                if ($parsed !== false) {
+                    $fromAddress = [ $parsed['email'] => $parsed['name'] ];
+                }
+            } elseif (strpos($lower, 'reply-to:') === 0) {
+                $parsed = $this->extractHeaderAddress(substr($rawHeader, 9));
+                if ($parsed !== false) {
+                    $replyToAddress = [ $parsed['email'] => $parsed['name'] ];
+                }
+            } else {
+                // Any other header: add as-is (e.g. "X-Custom-Header: Value")
+                // Symfony Mime\Email: ->getHeaders()->addTextHeader()
+                $parts = explode(':', $rawHeader, 2);
+                if (count($parts) === 2) {
+                    $key   = trim($parts[0]);
+                    $value = trim($parts[1]);
+                    $email->getHeaders()->addTextHeader($key, $value);
+                }
+            }
         }
-    }
 
-    /**
-     * Send an email using PHPMailer.
-     * 
-     * This method uses the PHPMailer library to send an email. It supports specifying recipients, subjects, 
-     * message content, custom headers, and attachments. Default values for sender and reply-to addresses 
-     * are used if not explicitly provided in the headers.
-     * 
-     * @param string $to The recipient's email address. Optionally, a name can be included in the format: "email:Name".
-     * @param string $subject The subject of the email.
-     * @param string $message The HTML content of the email.
-     * @param string|array $headers Optional. A single string or an array of additional headers, such as "From", "Reply-To", etc.
-     * @param string|array $attachments Optional. A single file path as a string or an array of file paths to be attached to the email.
-     * @return bool Returns true if the email was successfully sent, false otherwise.
-     * 
-     * @throws Exception if PHPMailer encounters an error while sending the email.
-     * 
-     * Usage Examples:
-     * 
-     * ```php
-     * // Simple usage
-     * $mailer = new LCS_Mail();
-     * $mailer->send('recipient@example.com', 'Test Subject', '<p>This is a test email.</p>');
-     * 
-     * // Usage with name in recipient and custom headers
-     * $mailer->send('recipient@example.com:Recipient Name', 'Test Subject', '<p>This is a test email.</p>', [
-     *     'From: Your Name <your_email@example.com>',
-     *     'Reply-To: reply@example.com'
-     * ]);
-     * 
-     * // Usage with an attachment
-     * $mailer->send('recipient@example.com', 'Test Subject', '<p>This is a test email.</p>', [], '/path/to/file.pdf');
-     * 
-     * // Usage with multiple attachments
-     * $mailer->send('recipient@example.com', 'Test Subject', '<p>This is a test email.</p>', [], [
-     *     '/path/to/file1.pdf',
-     *     '/path/to/file2.jpg'
-     * ]);
-     * ```
-     */
-    public function send($to, $subject, $message, $headers = '', $attachments = '')
-    {
+        // 6) Set From and Reply-To on Email
+        foreach ($fromAddress as $addr => $name) {
+            $email->from($addr, $name);
+        }
+        foreach ($replyToAddress as $addr => $name) {
+            $email->replyTo($addr, $name);
+        }
+
+        // 7) Attach files (verify existence first)
+        foreach ($attachmentsList as $path) {
+            if (! file_exists($path) || ! is_readable($path)) {
+                throw new \InvalidArgumentException("Attachment not found or not readable: {$path}");
+            }
+            $email->attachFromPath($path);
+        }
+
+        // 8) Send and catch any transport exceptions
         try {
-            list($recipientEmail, $recipientName) = $this->parseRecipient($to);
-            $this->setSenderAndReplyTo($headers);
-
-            // Set recipient
-            $this->mailer->addAddress($recipientEmail, $recipientName);
-
-            // Set email content
-            $this->mailer->isHTML(true);
-            $this->mailer->Subject = $subject;
-            $this->mailer->Body = $message;
-            $this->mailer->AltBody = strip_tags($message);
-
-            // Add attachments
-            $this->addAttachments($attachments);
-
-            // Add custom headers
-            $this->addCustomHeaders($headers);
-
-            // Send email
-            $this->mailer->send();
+            $this->symfonyMailer->send($email);
             return true;
-        } catch (Exception $e) {
-            trigger_error("Email could not be sent to $to. Error: {$this->mailer->ErrorInfo}");
+        } catch (TransportExceptionInterface $e) {
+            // Log or rethrow if desired; here we trigger_error and return false
+            trigger_error('Email send failed: ' . $e->getMessage());
             return false;
         }
     }
 
     /**
-     * Parses the recipient information.
-     * 
-     * @param string $to The recipient string in "email:Name" format.
-     * @return array An array with email and name.
+     * Parses a recipient string like "email@example.com:John Doe" or just "email@example.com".
+     *
+     * @param string $to  Raw input. If it contains “:”, the part after the first “:” is treated as the name.
+     * @return array      [ 0 => valid email, 1 => name-or-empty ]
+     *
+     * @throws \InvalidArgumentException If the email portion is not a valid address.
      */
-    private function parseRecipient($to)
+    private function parseRecipient(string $to): array
     {
+        $email = '';
+        $name  = '';
+
         if (strpos($to, ':') !== false) {
             $parts = explode(':', $to, 2);
             $email = trim($parts[0]);
-            $name = trim($parts[1]);
+            $name  = trim($parts[1]);
         } else {
             $email = trim($to);
-            $name = '';
         }
 
-        if (!$this->isEmailValid($email)) {
-            throw new Exception("Invalid recipient email: {$email}");
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new \InvalidArgumentException("Invalid recipient email: {$email}");
         }
 
-        return [$email, $name];
+        return [ $email, $name ];
     }
 
     /**
-     * Sets the sender and reply-to addresses from headers or defaults.
-     * 
-     * @param string|array $headers The headers to parse.
-     */
-    private function setSenderAndReplyTo(&$headers)
-    {
-        $defaultSender = ['email' => $this->username, 'name' => 'LCS Official'];
-        $defaultReplyTo = ['email' => 'no-reply@lcs.ng', 'name' => 'LCS Official'];
-
-        $sender = $defaultSender;
-        $replyTo = $defaultReplyTo;
-
-        $headers = is_array($headers) ? $headers : [$headers];
-
-        foreach ($headers as $key => $header) {
-            $lowerHeader = strtolower($header);
-            if (strpos($lowerHeader, 'from:') !== false) {
-                $sender = $this->extractHeaderAddress($header);
-                unset($headers[$key]);
-            } elseif (strpos($lowerHeader, 'reply-to:') !== false) {
-                $replyTo = $this->extractHeaderAddress($header);
-                unset($headers[$key]);
-            }
-        }
-
-        $this->mailer->setFrom($sender['email'], $sender['name']);
-        $this->mailer->addReplyTo($replyTo['email'], $replyTo['name']);
-    }
-
-    /**
-     * Extracts email and name from a header.
-     * 
-     * @param string $header The header string.
-     * @return array Associative array with 'email' and 'name'.
-     */
-    private function extractHeaderAddress($header)
-    {
-        if (preg_match('/([^:]+):(.+)/', $header, $matches)) {
-            return $this->extractMailerAddress($matches[2]) ?: ['email' => '', 'name' => ''];
-        }
-        return ['email' => '', 'name' => ''];
-    }
-
-    /**
-     * Extract name and email address from a string.
+     * Given a header fragment (e.g. "John Doe <john@example.com>" or "john@example.com:John Doe"), 
+     * extracts [ 'email' => 'john@example.com', 'name' => 'John Doe' ] or returns false on failure.
      *
-     * @param string $input The input string in the format 'Name <email@example.com>', 'Name:email@example.com', or 'email@example.com'.
-     * @return array|false Associative array with 'name' and 'email' on success, false on failure.
+     * @param string $fragment
+     * @return array|false
      */
-    private function extractMailerAddress($input) {
-
-        $result = ['name' => '', 'email' => ''];
-
-        // Regular expression to match the name and email address in either format
-        if (preg_match('/(?:(.+?)\s*[:<]\s*)?([^>]+)>?/', $input, $matches)) {
-            // Check if we have matches
-            if (!empty($matches)) {
-                foreach ( $matches as $match ) {
-                    if ($this->isEmailValid($match)) {
-                        $result['email'] = $this->sanitizeEmail(trim($match));
-                    } else {
-                        $result['name'] = trim($match);
-                    }
-                }
-            }
-        }
-        return ($result['email'] !== '') ? $result : false;
-    }
-
-    /**
-     * Validate email address.
-     * 
-     * @param string $email
-     * @return bool
-     */
-    public function isEmailValid($email) {
-        // Remove all illegal characters from email
-        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
-
-        // Validate email address
-        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return true; // Valid email
-        } else {
-            return false; // Invalid email
-        }
-    }
-
-    /**
-     * Sanitizes and validates an email input.
-     *
-     * @param mixed $input The input to sanitize.
-     * @return string The sanitized email or an empty string if invalid.
-     */
-    public function sanitizeEmail($input) {
-        $sanitized_input = filter_var(trim($input), FILTER_SANITIZE_EMAIL); // Sanitize and trim
-        return filter_var($sanitized_input, FILTER_VALIDATE_EMAIL) ? $sanitized_input : ''; // Validate email
-    }
-
-    /**
-     * Adds attachments to the email.
-     * 
-     * @param string|array $attachments The file paths to attach.
-     */
-    private function addAttachments($attachments)
+    private function extractHeaderAddress(string $fragment)
     {
-        $attachments = is_array($attachments) ? $attachments : [$attachments];
-        foreach ($attachments as $attachment) {
-            if (file_exists($attachment)) {
-                $this->mailer->addAttachment($attachment);
-            }
-        }
-    }
+        $fragment = trim($fragment);
 
-    /**
-     * Adds custom headers to the email.
-     * 
-     * @param string|array $headers The headers to add.
-     */
-    private function addCustomHeaders($headers)
-    {
-        $headers = is_array($headers) ? $headers : [$headers];
-        foreach ($headers as $header) {
-            if (strpos($header, ':') !== false) {
-                list($key, $value) = explode(':', $header, 2);
-                $this->mailer->addCustomHeader(trim($key), trim($value));
-            }
+        // Case A: "Name <email@example.com>"
+        if (preg_match('/^(.+?)\s*<\s*([^>]+)\s*>$/', $fragment, $m)) {
+            $name  = trim($m[1]);
+            $email = trim($m[2]);
         }
+        // Case B: "email@example.com:Name"
+        elseif (strpos($fragment, ':') !== false) {
+            list($emailPart, $namePart) = explode(':', $fragment, 2);
+            $email = trim($emailPart);
+            $name  = trim($namePart);
+        }
+        // Case C: Only an email
+        else {
+            $email = $fragment;
+            $name  = '';
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+
+        return [
+            'email' => $email,
+            'name'  => $name,
+        ];
     }
 }

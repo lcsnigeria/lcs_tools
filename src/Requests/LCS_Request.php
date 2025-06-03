@@ -800,7 +800,7 @@ class LCS_Request
      * @param bool $isolateAjaxEffects Whether to prioritize HTTP referer during AJAX requests to reflect the real source page.
      * @return string The referer URL or the current request URL as a fallback.
      */
-    public function get_referer_url(bool $includeProtocol = false, bool $isolateAjaxEffects = true)
+    public function get_referer(bool $includeProtocol = false, bool $isolateAjaxEffects = true)
     {
         // Check if the HTTP_REFERER server variable is set and not empty
         if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
@@ -862,6 +862,36 @@ class LCS_Request
     public function get_host(bool $includeProtocol = false): string
     {
         return $this->get_domain($includeProtocol);
+    }
+
+        /**
+     * Retrieves the current HTTP request method.
+     *
+     * This method returns the HTTP request method (e.g., 'GET', 'POST', etc.) as provided by the server.
+     * If the request method is not set, it returns NULL.
+     *
+     * @return string|null The HTTP request method, or NULL if unavailable.
+     */
+    public function get_request_method(): string|null 
+    {
+        return $_SERVER['REQUEST_METHOD'] ?? NULL;
+    }
+
+    /**
+     * Determines the type of the current HTTP request.
+     *
+     * This method checks if the request is an AJAX request and returns 'AJAX' if true.
+     * Otherwise, it returns the actual HTTP request method (e.g., 'GET', 'POST').
+     *
+     * @return string The type of request: 'AJAX', or the HTTP request method.
+     */
+    public function get_request_type() 
+    {
+        // Check if the request is an AJAX request
+        if ($this->is_ajax_request()) {
+            return 'AJAX';
+        }
+        return $this->get_request_method();
     }
 
     /**
