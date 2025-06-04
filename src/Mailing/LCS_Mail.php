@@ -146,6 +146,7 @@ class LCS_Mail
             Logs::reportError("Invalid mailer model specified.", 2);
         }
 
+        $this->model = $model;
         $this->mailer = null;
         switch ($model) {
             case 'php_mailer':
