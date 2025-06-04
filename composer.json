@@ -17,7 +17,8 @@
         "google/apiclient": "^2.11",
         "web-token/jwt-library": "^4.0",
         "symfony/mailer": "^7.3",
-        "symfony/http-client": "^7.3"
+        "symfony/http-client": "^7.3",
+        "phpmailer/phpmailer": "^6.10"
     },
     "config": {
         "allow-plugins": {

@@ -3,7 +3,7 @@
         'name' => 'lcsng/tools',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '9d46feb17633741614234381e0e4cf009efe6607',
+        'reference' => 'bc3156ea2f9faed4a85404c40b6398b7522b62c5',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -112,7 +112,7 @@
         'lcsng/tools' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '9d46feb17633741614234381e0e4cf009efe6607',
+            'reference' => 'bc3156ea2f9faed4a85404c40b6398b7522b62c5',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -183,6 +183,15 @@
             'provided' => array(
                 0 => '*',
             ),
+        ),
+        'phpmailer/phpmailer' => array(
+            'pretty_version' => 'v6.10.0',
+            'version' => '6.10.0.0',
+            'reference' => 'bf74d75a1fde6beaa34a0ddae2ec5fce0f72a144',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../phpmailer/phpmailer',
+            'aliases' => array(),
+            'dev_requirement' => false,
         ),
         'phpoption/phpoption' => array(
             'pretty_version' => '1.9.3',
