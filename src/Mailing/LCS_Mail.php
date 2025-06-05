@@ -1,7 +1,7 @@
 <?php
 namespace lcsTools\Mailing;
 
-use Debugging\LCS_Logs\Logs;
+use lcsTools\Debugging\Logs;
 
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\Transport;
@@ -12,6 +12,9 @@ use Symfony\Component\Mime\Address;
 // Import PHPMailer classes into the global namespace
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+
+// Use the Mailgun class from mailgun/mailgun-php v4.2
+use Mailgun\Mailgun;
 
 /**
  * Class LCS_Mail
@@ -84,25 +87,41 @@ class LCS_Mail
 
     /** @var string */
     public $model = 'php_mailer';
-    private static $validModels = ['php_mailer', 'symfony'];
+    private static $validModels = ['php_mailer', 'symfony', 'mailgun'];
 
-    /** @var Mailer|PHPMailer */
+    /** @var string $apiKey Mailgun API key used for authentication. */
+    public $apiKey;
+
+    /** @var string $domain Mailgun domain to be used for sending emails. */
+    public $domain;
+
+    /** @var string $endpoint Mailgun API endpoint URL. Defaults to "https://api.mailgun.net". */
+    public $endpoint = "https://api.mailgun.net";
+
+    /** @var Mailer|PHPMailer|Mailgun */
     private $mailer;
 
     /**
-     * Constructor.
+     * LCS_Mail constructor.
      *
-     * Initializes Mailer from the provided parameters.
+     * Initializes the mailer with the specified SMTP configuration.
      *
-     * @param string $host       SMTP hostname (e.g. "smtp.gmail.com").
-     * @param string $username   SMTP username (often your full email address).
-     * @param string $password   SMTP password or API token.
-     * @param int    $port       SMTP port (587 for STARTTLS, 465 for SMTPS, 25 for plain/TLS).
-     * @param string $encryption Either 'tls' (STARTTLS) or 'ssl' (SMTPS). Defaults to 'tls'.
+     * @param string|null $host        The SMTP server hostname (e.g., "smtp.gmail.com").
+     * @param string|null $username    The SMTP username, typically your full email address.
+     * @param string|null $password    The SMTP password or API token for authentication.
+     * @param int         $port        The SMTP server port. Common values:
+     *                                 - 587: STARTTLS (recommended)
+     *                                 - 465: SMTPS (SSL)
+     *                                 - 25: Plain/TLS
+     *                                 Defaults to 587.
+     * @param string      $encryption  The encryption method to use for the connection.
+     *                                 Accepts 'tls' (STARTTLS) or 'ssl' (SMTPS). Defaults to 'tls'.
+     * @param string      $model       The mailer model/driver to use (e.g., 'php_mailer').
+     *                                 Defaults to 'php_mailer'.
      *
-     * @throws \InvalidArgumentException If $port/encryption combination is unsupported.
+     * @throws \InvalidArgumentException If the provided $port and $encryption combination is unsupported.
      */
-    public function __construct(string $host, string $username, string $password, int $port = 587, string $encryption = 'tls', string $model = 'php_mailer')
+    public function __construct(?string $host = null, ?string $username = null, ?string $password = null, int $port = 587, string $encryption = 'tls', string $model = 'php_mailer')
     {
         $this->host       = $host;
         $this->username   = $username;
@@ -146,6 +165,11 @@ class LCS_Mail
             Logs::reportError("Invalid mailer model specified.", 2);
         }
 
+        // If model is not mailgun and yet host, username or password is null, throw error : reportError(..,2)
+        if ($model !== 'mailgun' && (empty($this->host) || empty($this->username) || empty($this->password))) {
+            Logs::reportError("SMTP host, username, and password must be set for non-Mailgun models.", 2);
+        }
+
         $this->model = $model;
         $this->mailer = null;
         switch ($model) {
@@ -156,7 +180,14 @@ class LCS_Mail
             case 'symfony':
                 $this->initializeSymfony();
                 break;
-            default:
+            case 'mailgun':
+                if (!$this->apiKey || !$this->domain) {
+                    Logs::reportError("Mailgun API key and domain must be set for Mailgun model.", 2);
+                    break;
+                }
+                // Instantiate the client.
+                $this->mailer = Mailgun::create($this->apiKey, $this->endpoint);
+                break;
                 Logs::reportError("Unknown mailer model encountered during initialization.", 2);
                 break;
         }
@@ -356,7 +387,7 @@ class LCS_Mail
      *
      * @return bool  Returns true if the mailer did not throw any exception.
      */
-    public function send(string $to, string $subject, string $htmlBody, $headers = '', $attachments = ''): bool
+    public function send(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
         // Ensure mailer is initialized
         if (!$this->mailer) {
@@ -368,6 +399,8 @@ class LCS_Mail
                 return $this->sendPHPMailer($to, $subject, $htmlBody, $headers, $attachments);
             case 'symfony':
                 return $this->sendSymfony($to, $subject, $htmlBody, $headers, $attachments);
+            case 'mailgun':
+                return $this->sendMailgun($to, $subject, $htmlBody, $headers, $attachments);
             default:
                 Logs::reportError("Unknown mailer model encountered during send().", 2);
                 return false;
@@ -383,7 +416,7 @@ class LCS_Mail
      * 
      * @param string $to The recipient's email address. Optionally, a name can be included in the format: "email:Name".
      * @param string $subject The subject of the email.
-     * @param string $message The HTML content of the email.
+     * @param string $htmlBody The HTML content of the email.
      * @param string|array $headers Optional. A single string or an array of additional headers, such as "From", "Reply-To", etc.
      * @param string|array $attachments Optional. A single file path as a string or an array of file paths to be attached to the email.
      * @return bool Returns true if the email was successfully sent, false otherwise.
@@ -413,7 +446,7 @@ class LCS_Mail
      * ]);
      * ```
      */
-    public function sendPHPMailer($to, $subject, $message, $headers = '', $attachments = '')
+    public function sendPHPMailer(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''):bool
     {
         try {
             if ($this->getModel() !== 'php_mailer') {
@@ -429,8 +462,8 @@ class LCS_Mail
             // Set email content
             $this->mailer->isHTML(true);
             $this->mailer->Subject = $subject;
-            $this->mailer->Body = $message;
-            $this->mailer->AltBody = strip_tags($message);
+            $this->mailer->Body = $htmlBody;
+            $this->mailer->AltBody = strip_tags($htmlBody);
 
             // Add attachments
             $this->addPMAttachments($attachments);
@@ -473,7 +506,7 @@ class LCS_Mail
      *
      * @throws \InvalidArgumentException If recipient email is invalid or an attachment path does not exist.
      */
-    public function sendSymfony(string $to, string $subject, string $htmlBody, $headers = '', $attachments = ''): bool
+    public function sendSymfony(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
         // 1) Initialize mailer, Normalize headers and attachments into arrays
         if ($this->getModel() !== 'symfony') {
@@ -551,6 +584,111 @@ class LCS_Mail
     }
 
     /**
+     * Sends an email using the Mailgun service.
+     *
+     * @param string       $to          The recipient's email address.
+     * @param string       $subject     The subject of the email.
+     * @param string       $htmlBody    The HTML content of the email body.
+     * @param array|string $headers     Optional. Additional email headers as an associative array or a raw string.
+     * @param array|string $attachments Optional. File attachments as an array of file paths or a single file path string.
+     *
+     * @return bool Returns true if the email was sent successfully, false otherwise.
+     *
+     * @throws \Exception If there is an error during the sending process.
+     *
+     * This method integrates with the Mailgun API to send emails with optional headers and attachments.
+     * It supports both single and multiple recipients, as well as flexible header and attachment formats.
+     */
+    public function sendMailgun(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
+    {
+        // Initialize mailer, Normalize headers and attachments into arrays
+        if ($this->getModel() !== 'mailgun') {
+            $this->initializeMailer('mailgun');
+        }
+
+        // Parse recipient
+        list($recipientEmail, $recipientName) = $this->parseRecipient($to);
+        $toHeader = $recipientName ? "{$recipientName} <{$recipientEmail}>" : $recipientEmail;
+
+        // Prepare message data
+        $messageData = [
+            'from'    => 'LCS Official <official@lcs.ng>',
+            'to'      => $toHeader,
+            'subject' => $subject,
+            'html'    => $htmlBody,
+            'text'    => strip_tags($htmlBody),
+        ];
+
+        // Handle headers
+        $headersArray = is_array($headers) ? $headers : (strlen(trim($headers)) > 0 ? [$headers] : []);
+        foreach ($headersArray as $header) {
+            $header = trim($header);
+            if (stripos($header, 'Reply-To:') === 0) {
+                $messageData['h:Reply-To'] = $this->extractMailHeaders($header)['Reply-To'];
+            } elseif (stripos($header, 'From:') === 0) {
+                $messageData['from'] = $this->extractMailHeaders($header)['From'];
+            } elseif (strpos($header, ':') !== false) {
+                list($key, $value) = explode(':', $header, 2);
+                $messageData['h:' . trim($key)] = trim($value);
+            }
+        }
+
+        // Send simple email if no attachments
+        if (empty($attachments)) {
+            try {
+            $response = $this->mailer->messages()->send($this->domain, $messageData);
+            if ($response && $response->getId()) {
+                return true;
+            } else {
+                Logs::reportError("Mailgun send failed: No message ID returned.", 2);
+                return false;
+            }
+            } catch (\Exception $e) {
+            Logs::reportError("Mailgun send failed: " . $e->getMessage(), 2);
+            return false;
+            }
+        }
+
+        // Prepare attachments
+        $attachmentsList = is_array($attachments) ? $attachments : (strlen(trim($attachments)) > 0 ? [$attachments] : []);
+        $curlFiles = [];
+        foreach ($attachmentsList as $path) {
+            if (file_exists($path) && is_readable($path)) {
+                $curlFiles[] = curl_file_create($path);
+            }
+        }
+
+        // Build POST fields
+        $postFields = $messageData;
+        if (!empty($curlFiles)) {
+            foreach ($curlFiles as $file) {
+                $postFields['attachment'][] = $file;
+            }
+        }
+
+        // Send via cURL
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->endpoint);
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        curl_setopt($ch, CURLOPT_USERPWD, 'api:' . $this->apiKey);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+
+        $result = curl_exec($ch);
+        $error  = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status === 200) {
+            return true;
+        } else {
+            Logs::reportError("Mailgun send failed: HTTP $status, $error, Response: $result", 2);
+            return false;
+        }
+    }
+
+    /**
      * Returns the current mailer model in use.
      *
      * @return string The mailer model ('php_mailer' or 'symfony').
@@ -561,7 +699,11 @@ class LCS_Mail
     }
 
     /**
-     * Parses a recipient string like "email@example.com:John Doe" or just "email@example.com".
+     * Parses a recipient string like:
+     *   - "email@example.com:John Doe"
+     *   - "email@example.com"
+     *   - "John Doe <email@example.com>"
+     *   - "email@example.com:John Doe"
      *
      * @param string $to  Raw input. If it contains “:”, the part after the first “:” is treated as the name.
      * @return array      [ 0 => valid email, 1 => name-or-empty ]
@@ -573,19 +715,70 @@ class LCS_Mail
         $email = '';
         $name  = '';
 
-        if (strpos($to, ':') !== false) {
+        $to = trim($to);
+
+        // Case 1: "Name <email@example.com>"
+        if (preg_match('/^(.+?)\s*<\s*([^>]+)\s*>$/', $to, $m)) {
+            $name  = trim($m[1]);
+            $email = trim($m[2]);
+        }
+        // Case 2: "email@example.com:Name"
+        elseif (strpos($to, ':') !== false) {
             $parts = explode(':', $to, 2);
             $email = trim($parts[0]);
             $name  = trim($parts[1]);
-        } else {
-            $email = trim($to);
+        }
+        // Case 3: just "email@example.com"
+        else {
+            $email = $to;
+            $name  = '';
         }
 
-        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new \InvalidArgumentException("Invalid recipient email: {$email}");
         }
 
-        return [ $email, $name ];
+        return [$email, $name];
+    }
+
+    /**
+     * Extracts headers from a string into an associative array.
+     * Supports formats like:
+     *   - "From: Full Name <username@example.com>"
+     *   - "From: Full Name username@example.com"
+     *   - "Custom-Header-Name: Value"
+     * Returns: [ 'From' => 'Full Name username@example.com', 'Custom-Header-Name' => 'Value', ... ]
+     *
+     * @param string $headerString
+     * @return array
+     */
+    public static function extractMailHeaders(string $headerString): array
+    {
+        $headers = [];
+        // Split by newlines or semicolons (support multi-line input)
+        $lines = preg_split('/[\r\n;]+/', $headerString);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+            if (strpos($line, ':') !== false) {
+                list($key, $value) = explode(':', $line, 2);
+                $key = trim($key);
+                $value = trim($value);
+
+                // For "From" header, normalize "Full Name <email>" or "Full Name email"
+                if (strtolower($key) === 'from') {
+                    // If "<...>" present, extract name and email
+                    if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
+                        $headers[$key] = trim($m[1]) . ' ' . trim($m[2]);
+                    } else {
+                        $headers[$key] = $value;
+                    }
+                } else {
+                    $headers[$key] = $value;
+                }
+            }
+        }
+        return $headers;
     }
 
     /**

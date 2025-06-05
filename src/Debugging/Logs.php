@@ -1,5 +1,5 @@
 <?php
-namespace Debugging\LCS_Logs;
+namespace lcsTools\Debugging;
 
 use Exception;
 
