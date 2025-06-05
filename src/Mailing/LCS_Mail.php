@@ -119,7 +119,7 @@ class LCS_Mail
             ));
         }
 
-        $this->encryption = $allowedEncrypt;
+        $this->encryption = $encryption;
     }
 
     /**

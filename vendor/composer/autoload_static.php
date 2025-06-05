@@ -13,10 +13,12 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'e69f7f6ee287b969198c3c9d6777bd38' => __DIR__ . '/..' . '/symfony/polyfill-intl-normalizer/bootstrap.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
         'f598d06aa772fa33d905e87be6398fb1' => __DIR__ . '/..' . '/symfony/polyfill-intl-idn/bootstrap.php',
+        '9c67151ae59aff4788964ce8eb2a0f43' => __DIR__ . '/..' . '/clue/stream-filter/src/functions_include.php',
         '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
+        'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
+        '8cff32064859f4559445b89279f3199c' => __DIR__ . '/..' . '/php-http/message/src/filters.php',
         '1f87db08236948d07391152dccb70f04' => __DIR__ . '/..' . '/google/apiclient-services/autoload.php',
         'decc78cc4436b1292c6c0d151b19445c' => __DIR__ . '/..' . '/phpseclib/phpseclib/phpseclib/bootstrap.php',
-        'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
         '667aeda72477189d0494fecd327c3641' => __DIR__ . '/..' . '/symfony/var-dumper/Resources/functions/dump.php',
         'a8d3953fd9959404dd22d3dfcd0a79f0' => __DIR__ . '/..' . '/google/apiclient/src/aliases.php',
     );
@@ -30,6 +32,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         array (
             'lcsTools\\' => 9,
         ),
+        'W' => 
+        array (
+            'Webmozart\\Assert\\' => 17,
+        ),
         'S' => 
         array (
             'Symfony\\Polyfill\\Php80\\' => 23,
@@ -41,6 +47,7 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
             'Symfony\\Contracts\\HttpClient\\' => 29,
             'Symfony\\Contracts\\EventDispatcher\\' => 34,
             'Symfony\\Component\\VarDumper\\' => 28,
+            'Symfony\\Component\\OptionsResolver\\' => 34,
             'Symfony\\Component\\Mime\\' => 23,
             'Symfony\\Component\\Mailer\\' => 25,
             'Symfony\\Component\\HttpClient\\' => 29,
@@ -64,10 +71,15 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
             'ParagonIE\\ConstantTime\\' => 23,
             'PHPMailer\\PHPMailer\\' => 20,
         ),
+        'N' => 
+        array (
+            'Nyholm\\Psr7\\' => 12,
+        ),
         'M' => 
         array (
             'Monolog\\' => 8,
             'Minishlink\\WebPush\\' => 19,
+            'Mailgun\\' => 8,
         ),
         'L' => 
         array (
@@ -76,6 +88,15 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'J' => 
         array (
             'Jose\\Component\\' => 15,
+        ),
+        'H' => 
+        array (
+            'Http\\Promise\\' => 13,
+            'Http\\Message\\MultipartStream\\' => 29,
+            'Http\\Message\\' => 13,
+            'Http\\Discovery\\' => 15,
+            'Http\\Client\\Common\\' => 19,
+            'Http\\Client\\' => 12,
         ),
         'G' => 
         array (
@@ -100,6 +121,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
             'Dotenv\\' => 7,
             'Doctrine\\Common\\Lexer\\' => 22,
         ),
+        'C' => 
+        array (
+            'Clue\\StreamFilter\\' => 18,
+        ),
         'B' => 
         array (
             'Brick\\Math\\' => 11,
@@ -115,6 +140,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'lcsTools\\' => 
         array (
             0 => __DIR__ . '/../..' . '/src',
+        ),
+        'Webmozart\\Assert\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/webmozart/assert/src',
         ),
         'Symfony\\Polyfill\\Php80\\' => 
         array (
@@ -151,6 +180,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'Symfony\\Component\\VarDumper\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/var-dumper',
+        ),
+        'Symfony\\Component\\OptionsResolver\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/options-resolver',
         ),
         'Symfony\\Component\\Mime\\' => 
         array (
@@ -229,6 +262,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         array (
             0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
         ),
+        'Nyholm\\Psr7\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/nyholm/psr7/src',
+        ),
         'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
@@ -236,6 +273,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'Minishlink\\WebPush\\' => 
         array (
             0 => __DIR__ . '/..' . '/minishlink/web-push/src',
+        ),
+        'Mailgun\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/mailgun/mailgun-php/src',
         ),
         'League\\Uri\\' => 
         array (
@@ -245,6 +286,30 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'Jose\\Component\\' => 
         array (
             0 => __DIR__ . '/..' . '/web-token/jwt-library',
+        ),
+        'Http\\Promise\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/promise/src',
+        ),
+        'Http\\Message\\MultipartStream\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/multipart-stream-builder/src',
+        ),
+        'Http\\Message\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/message/src',
+        ),
+        'Http\\Discovery\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/discovery/src',
+        ),
+        'Http\\Client\\Common\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/client-common/src',
+        ),
+        'Http\\Client\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/php-http/httplug/src',
         ),
         'GuzzleHttp\\Psr7\\' => 
         array (
@@ -289,6 +354,10 @@ class ComposerStaticInit06c91ad7743d4fd8728556f9ad43ed45
         'Doctrine\\Common\\Lexer\\' => 
         array (
             0 => __DIR__ . '/..' . '/doctrine/lexer/src',
+        ),
+        'Clue\\StreamFilter\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/clue/stream-filter/src',
         ),
         'Brick\\Math\\' => 
         array (
