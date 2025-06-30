@@ -60,7 +60,7 @@ class PHPMailer extends MailingConfigs
      * message content, custom headers, and attachments. Default values for sender and reply-to addresses 
      * are used if not explicitly provided in the headers.
      * 
-     * @param string $to The recipient's email address. Optionally, a name can be included in the format: "email:Name".
+     * @param string|array $to The recipient's email address. Optionally, a name can be included in the format: "email:Name".
      * @param string $subject The subject of the email.
      * @param string $htmlBody The HTML content of the email.
      * @param string|array $headers Optional. A single string or an array of additional headers, such as "From", "Reply-To", etc.
@@ -92,14 +92,17 @@ class PHPMailer extends MailingConfigs
      * ]);
      * ```
      */
-    public function sendPHPMailer(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''):bool
+    public function sendPHPMailer(string|array $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''):bool
     {
         try {
-            list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($to);
+            $toArray = !is_array($to) ? [$to] : $to;
+            foreach ( $toArray as $t ) {
+                list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+                // Set recipient
+                $this->mailer->addAddress($recipientEmail, $recipientName);
+            }
+            
             $this->setPMSenderAndReplyTo($headers);
-
-            // Set recipient
-            $this->mailer->addAddress($recipientEmail, $recipientName);
 
             // Set email content
             $this->mailer->isHTML(true);
@@ -138,12 +141,14 @@ class PHPMailer extends MailingConfigs
         $headers = is_array($headers) ? $headers : [$headers];
 
         foreach ($headers as $key => $header) {
-            $lowerHeader = strtolower($header);
-            if (strpos($lowerHeader, 'from:') !== false) {
-                $sender = MailingValidations::extractHeaderAddress($header);
+            $mailerHeaderData = MailingValidations::extractMailHeaders($header);
+            if (array_key_first($mailerHeaderData) === 'from') {
+                $sender['email'] = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
+                $sender['name'] = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
                 unset($headers[$key]);
-            } elseif (strpos($lowerHeader, 'reply-to:') !== false) {
-                $replyTo = MailingValidations::extractHeaderAddress($header);
+            } elseif (array_key_first($mailerHeaderData) === 'reply-to') {
+                $replyTo['email'] = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
+                $replyTo['name'] = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
                 unset($headers[$key]);
             }
         }
@@ -176,10 +181,11 @@ class PHPMailer extends MailingConfigs
     {
         $headers = is_array($headers) ? $headers : [$headers];
         foreach ($headers as $header) {
-            if (strpos($header, ':') !== false) {
-                list($key, $value) = explode(':', $header, 2);
-                $this->mailer->addCustomHeader(trim($key), trim($value));
-            }
+            $mailerHeaderData = MailingValidations::extractMailHeaders($header);
+            $this->mailer->addCustomHeader(
+                trim(array_key_first($mailerHeaderData)), 
+                trim(array_values($mailerHeaderData)[0])
+            );
         }
     }
 }

@@ -54,8 +54,8 @@ class MailingConfigs
     /** @var string $domain Mailing domain to be used for sending emails. */
     protected $domain;
 
-    /** @var string $endpoint Mailing API endpoint URL. Defaults to "https://api.mailgun.net". */
-    protected $endpoint = "https://api.mailgun.net";
+    /** @var string $endpoint Mailing API endpoint URL. */
+    protected $endpoint;
 
     protected $isApiBased = false;
 

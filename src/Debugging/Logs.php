@@ -7,7 +7,7 @@ use Exception;
  * Class LCS_Logs
  *
  * Provides a centralized utility for logging, error reporting, and debugging.
- * Supports multiple reporting modes such as throwing exceptions or triggering PHP notices.
+ * Supports multiple reporting modes such as logging with error_log, triggering PHP errors, or throwing exceptions.
  * Designed to be extended with additional debugging, logging, or diagnostic tools.
  *
  * @package Debugging\LCS_Logs
@@ -16,38 +16,42 @@ class Logs extends Exception
 {
     /**
      * Default logging state.
-     * - 0 or false: silent
-     * - 1 or true: trigger PHP notice
-     * - 2: throw exception
+     * - 1: use error_log with timestamp
+     * - 2: trigger_error
+     * - 3: throw Exception
      *
-     * @var int|bool|null
+     * @var int
      */
-    private static $logState;
+    private static $logState = 1;
 
     /**
-     * Reports an error message based on the current or provided logging state.
+     * Reports an error message based on the specified logging state.
      *
-     * @param string $message   The error message to report.
-     * @param int|bool|null $logState
+     * @param string $message The error message to report.
+     * @param int $logState
      *        Defines behavior:
-     *        - 2: throw Exception
-     *        - 1 or true: trigger E_USER_NOTICE
-     *        - 0 or false: ignore (returns false)
+     *        - 1: use error_log with timestamp (default)
+     *        - 2: trigger_error with specified error type
+     *        - 3: throw Exception
+     * @param int $errorType The error type for trigger_error when logState=2 (default E_USER_NOTICE)
      *
-     * @return false|void Returns false if the error is ignored.
-     *
-     * @throws Exception If logState is 2.
+     * @throws Exception If logState is 3 or if an invalid logState is provided.
      */
-    public static function reportError(string $message, $logState = 1)
+    public static function reportError(string $message, $logState = 1, int $errorType = E_USER_NOTICE)
     {
-        $logState = $logState ?? self::$logState ?? false;
+        $logState = $logState ?? self::$logState;
 
-        if ($logState == 2) {
+        if (!in_array($logState, [1, 2, 3], true)) {
+            throw new Exception("Invalid logState: $logState");
+        }
+
+        if ($logState == 1) {
+            $timestamp = date('Y-m-d H:i:s');
+            error_log("[$timestamp] $message");
+        } elseif ($logState == 2) {
+            trigger_error($message, $errorType);
+        } elseif ($logState == 3) {
             throw new Exception($message);
-        } elseif ($logState == 1 || $logState === true) {
-            trigger_error($message, E_USER_NOTICE);
-        } else {
-            return false;
         }
     }
 }

@@ -19,7 +19,7 @@ class Mailgun extends MailingConfigs
     {
         $this->domain   = $domain ?? $this->domain;
         $this->apiKey   = $apiKey ?? $this->apiKey;
-        $this->endpoint = $endpoint ?? $this->endpoint;
+        $this->endpoint = $endpoint ?? 'https://api.mailgun.net';
         $this->model    = 'mailgun';
 
         $this->initializeMailer('mailgun');

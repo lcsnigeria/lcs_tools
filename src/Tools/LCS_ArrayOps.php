@@ -196,4 +196,118 @@ class LCS_ArrayOps
         return implode(', ', $listed) . ' and ' . $othersCount . ' other' . ($othersCount > 1 ? 's' : '');
     }
 
+    /**
+     * Isolate items into an array of associative arrays with a specific key or set of keys.
+     *
+     * This function takes an array of values and transforms it into an array of 
+     * associative arrays. If $keys is a string, each item in $items must be scalar,
+     * and the result will be [ ['key' => value], ... ]. If $keys is an array, each
+     * item in $items must itself be an array of the same length as $keys, and the
+     * result will map keys to corresponding values in each item.
+     *
+     * Examples:
+     * ```php
+     *   // Single key:
+     *   isolateItemsWithKey([10, 20, 30], 'quantity');
+     *   // yields:
+     *   // [
+     *   //   ['quantity' => 10],
+     *   //   ['quantity' => 20],
+     *   //   ['quantity' => 30],
+     *   // ]
+     *
+     *   // Multiple keys:
+     *   isolateItemsWithKey([
+     *       ['Chinonso', 'Nigeria'],
+     *       ['Mike', 'United States']
+     *   ], ['name', 'country']);
+     *   // yields:
+     *   // [
+     *   //   ['name' => 'Chinonso', 'country' => 'Nigeria'],
+     *   //   ['name' => 'Mike',    'country' => 'United States'],
+     *   // ]
+     * ```
+     *
+     * @param array $items The array of values (or arrays) to isolate.
+     *                     If $keys is a string, each element must be scalar.
+     *                     If $keys is an array, each element must be an array of the same length.
+     * @param string|array $keys The key (string) to use for each scalar item, 
+     *                           or an array of keys for nested array items.
+     *
+     * @return array The transformed array of associative arrays.
+     * @throws InvalidArgumentException If:
+     *   - $items is empty.
+     *   - $keys is a string but any item is not scalar.
+     *   - $keys is an array but any item is not array, or counts do not match.
+     *   - $keys is neither string nor array (defensive).
+     */
+    public static function isolateItemsWithKey(array $items, string|array $keys): array
+    {
+        // 1. Ensure the input array is not empty.
+        if (empty($items)) {
+            throw new \InvalidArgumentException("The input array must not be empty.");
+        }
+
+        // 2. Handle the case where $keys is a string: each item must be scalar.
+        if (is_string($keys)) {
+            $result = [];
+            foreach ($items as $index => $item) {
+                if (is_array($item) || is_object($item)) {
+                    throw new \InvalidArgumentException(
+                        "When \$keys is a string ('{$keys}'), each item must be a scalar value. "
+                        . "Invalid item at index {$index}."
+                    );
+                }
+                // Wrap scalar into associative array
+                $result[$index] = [$keys => $item];
+            }
+            return $result;
+        }
+
+        // 3. Handle the case where $keys is an array: each item must be an array of same length.
+        if (is_array($keys)) {
+            $keyCount = count($keys);
+            if ($keyCount === 0) {
+                throw new \InvalidArgumentException("The keys array must contain at least one key.");
+            }
+            $result = [];
+            foreach ($items as $index => $item) {
+                if (!is_array($item)) {
+                    throw new \InvalidArgumentException(
+                        "When \$keys is an array, each item in \$items must be an array. "
+                        . "Invalid (non-array) item at index {$index}."
+                    );
+                }
+                if (count($item) !== $keyCount) {
+                    throw new \InvalidArgumentException(
+                        "Count mismatch at index {$index}: expected an array with {$keyCount} value"
+                        . ($keyCount > 1 ? 's' : '') . " to match keys "
+                        . json_encode($keys) . ", but got an array with " . count($item) . " element"
+                        . (count($item) > 1 ? 's' : '') . "."
+                    );
+                }
+                // Build associative mapping for this item
+                $assoc = [];
+                foreach ($keys as $kIndex => $keyName) {
+                    // Optional: you may also check that $keyName is a non-empty string
+                    if (!is_string($keyName) || $keyName === '') {
+                        throw new \InvalidArgumentException(
+                            "Invalid key at position {$kIndex} in keys array: keys must be non-empty strings."
+                        );
+                    }
+                    $assoc[$keyName] = $item[$kIndex];
+                }
+                $result[$index] = $assoc;
+            }
+            return $result;
+        }
+
+        // 4. Defensive: if $keys is neither string nor array (signature enforces string|array),
+        //    but just in case something unexpected arrives:
+        throw new \InvalidArgumentException(
+            'The $keys parameter must be a string or a non-empty array of strings.'
+        );
+    }
+
+
 }

@@ -3,7 +3,6 @@ namespace lcsTools\Mailing;
 
 use lcsTools\Debugging\Logs;
 use lcsTools\Mailing\MailingValidations;
-use InvalidArgumentException;
 
 use MailingConfigs;
 
@@ -33,7 +32,7 @@ class ResendMailer extends MailingConfigs
     /**
      * Sends an email using the Resend API.
      *
-     * @param string                $to           Recipient address, optionally with name in "email@example.com:Recipient Name" format.
+     * @param string|array                $to           Recipient address, optionally with name in "email@example.com:Recipient Name" format.
      * @param string                $subject      Email subject line.
      * @param string                $htmlBody     HTML content of the email.
      * @param string|string[]       $headers      (Optional) Additional raw headers (e.g., "Reply-To: foo@bar.com").
@@ -43,7 +42,7 @@ class ResendMailer extends MailingConfigs
      * @throws InvalidArgumentException If recipient parsing fails or directory/file checks fail.
      */
     public function sendResend(
-        string $to,
+        string|array $to,
         string $subject,
         string $htmlBody,
         array|string $headers = [],
@@ -51,19 +50,25 @@ class ResendMailer extends MailingConfigs
     ): bool {
         try {
             // Parse and validate recipient
-            [$recipientEmail, $recipientName] = MailingValidations::parseRecipient($to);
-            if (empty($recipientEmail) || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
-                throw new InvalidArgumentException("sendResend(): Invalid recipient email '{$recipientEmail}'.");
+            $toArray = !is_array($to) ? [$to] : $to;
+            $toAddresses = [];
+            foreach ( $toArray as $t ) {
+                list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+                if (empty($recipientEmail) || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                    throw new \InvalidArgumentException("sendResend(): Invalid recipient email '{$recipientEmail}'.");
+                }
+                // Set recipient data
+                $toAddresses[] = empty($recipientName) 
+                ? $recipientEmail : "$recipientName <$recipientEmail>";
             }
-
-            $toHeader = $recipientName
-                ? sprintf('%s <%s>', $recipientName, $recipientEmail)
-                : $recipientEmail;
+            if (empty($toAddresses)) {
+                Logs::reportError("No valid recipient email address provided.", 2);
+            }
 
             // Base payload
             $payload = [
                 'from'    => 'LCS Official <official@lcs.ng>',
-                'to'      => [$toHeader],
+                'to'      => $toAddresses,
                 'subject' => $subject,
                 'html'    => $htmlBody,
                 'text'    => strip_tags($htmlBody),
@@ -74,15 +79,15 @@ class ResendMailer extends MailingConfigs
                 ? array_map('trim', array_filter($headers, fn($h) => trim((string)$h) !== ''))
                 : (trim((string)$headers) !== '' ? [trim($headers)] : []);
             foreach ($headersList as $header) {
-                if (stripos($header, 'Reply-To:') === 0) {
+                if (stripos(strtolower($header), 'reply-to:') === 0) {
                     $parsed = MailingValidations::extractMailHeaders($header);
-                    if (!empty($parsed['Reply-To'])) {
-                        $payload['reply_to'] = $parsed['Reply-To'];
+                    if (!empty($parsed['reply-to'])) {
+                        $payload['reply_to'] = $parsed['reply-to'];
                     }
-                } elseif (stripos($header, 'From:') === 0) {
+                } elseif (stripos(strtolower($header), 'from:') === 0) {
                     $parsed = MailingValidations::extractMailHeaders($header);
-                    if (!empty($parsed['From'])) {
-                        $payload['from'] = $parsed['From'];
+                    if (!empty($parsed['from'])) {
+                        $payload['from'] = $parsed['from'];
                     }
                 }
             }
@@ -136,8 +141,7 @@ class ResendMailer extends MailingConfigs
                 ],
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => $jsonPayload,
-                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_POSTFIELDS     => $jsonPayload
             ]);
 
             $response = curl_exec($ch);

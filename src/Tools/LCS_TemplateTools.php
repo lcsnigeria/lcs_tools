@@ -242,5 +242,57 @@ class LCS_TemplateTools
         return $sitemap;
     }
 
+    /**
+     * Generates the HTML block for file management, including file listing and editor.
+     *
+     * @param string $fileDir The directory path to list and manage files.
+     * @return string The HTML output for the file management block.
+     */
+    public static function fileManagementBlock($fileDir): string {
+        // Initialize the output
+        $output = '';
+
+        // Display the public assets list
+        $output .= '<div class="lcsFileManagement">';
+        $output .= '<div class="lcsFileListingWrapper">';
+        $output .= '<div class="lcsFileListing">';
+        $output .= lcs_list_dirs_data($fileDir);
+        $output .= '</div>';
+        $output .= '</div>';
+
+        // Display the file editor
+        $output .= '<div class="lcsFileEditorWrapper">';
+        $output .= '<div class="lcsFileEditor">';
+
+        // File editor header
+        $output .= '<div class="_editor_header">';
+        // Language mode selector
+        $output .= '<select id="_editor_language_selector" aria-label="Select a Language" onchange="lcsSwitchCodeLanguage(this.value)">';
+        $output .= '    <option value="php">PHP</option>';
+        $output .= '    <option value="javascript">JavaScript</option>';
+        $output .= '    <option value="html">HTML</option>';
+        $output .= '    <option value="css">CSS</option>';
+        $output .= '</select>';
+        $output .= '</div>';
+
+        // File editor body
+        $output .= '<div class="_editor_body">';
+        $output .= '<textarea id="lcsFile_editor" class="_file_editor" placeholder="Select a file from the list to edit"></textarea>';
+        $output .= '</div>';
+
+        // File editor footer
+        $output .= '<div class="_editor_footer">';
+        $output .= '<div class="_code_action_buttons">';
+        $output .= '<button type="button" class="_save_file_content">Save</button>';
+        $output .= '</div>';
+        $output .= '</div>';
+
+        $output .= '</div>';
+        $output .= '</div>';
+        $output .= '</div>'; // Close the file management block
+
+        return $output;
+    }
+
 
 }

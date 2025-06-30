@@ -693,6 +693,7 @@ class LCS_Request
      * Retrieves the full URI of the current request.
      *
      * @param bool $stripQueryArgs Whether to remove query parameters from the URI.
+     * @param bool $isolateAjaxEffects Whether to prioritize HTTP referer during AJAX requests to reflect the real source page. Default is true.
      * @return string The request URI.
      * 
      * @example
@@ -700,9 +701,18 @@ class LCS_Request
      * $this->get_uri(); // "/products/item?id=123"
      * $this->get_uri(true); // "/products/item"
      */
-    public function get_uri(bool $stripQueryArgs = false)
+    public function get_uri(bool $stripQueryArgs = false, bool $isolateAjaxEffects = true)
     {
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
+
+        if ($isolateAjaxEffects && $this->is_ajax_request() && isset($_SERVER['HTTP_REFERER'])) {
+            $referer = $_SERVER['HTTP_REFERER'];
+            $parsed = parse_url($referer);
+            $uri = $parsed['path'] ?? $uri;
+            if (!$stripQueryArgs && isset($parsed['query'])) {
+                $uri .= '?' . $parsed['query'];
+            }
+        }
 
         if ($stripQueryArgs) {
             $uri = explode('?', $uri)[0];
@@ -788,6 +798,28 @@ class LCS_Request
         }
 
         return trim($url);
+    }
+
+    /**
+     * Generates a home URL with an optional additional path.
+     *
+     * @param string|null $additional_path An optional path to append to the home URL. Defaults to null.
+     * @return string The complete home URL, including the additional path if provided.
+     */
+    public function get_home_url($additional_path = null) {
+        // Set the base home URL
+        $base_url = '/';
+
+        // Normalize the additional path
+        if ($additional_path !== null) {
+            // Remove leading slashes and trailing slashes
+            $additional_path = trim($additional_path, '/');
+        } else {
+            return $base_url;
+        }
+
+        // Return the complete home URL
+        return $base_url . $additional_path;
     }
 
     /**
@@ -926,6 +958,27 @@ class LCS_Request
     }
 
     /**
+     * Validate that a given URL belongs to the current server.
+     * 
+     * @param string $url The URL to validate.
+     * @return bool True if the URL belongs to the server, false otherwise.
+     */
+    public function is_server_url($url) {
+        // Get the host of the current server
+        $server_host = $_SERVER['HTTP_HOST'];
+        
+        // Parse the given URL to extract the host
+        $parsed_url = parse_url($url, PHP_URL_HOST);
+
+        if (empty($parsed_url)) {
+            return preg_match('/^localhost\//', $url);
+        }
+
+        // If the host of the URL matches the server's host, it's a valid server URL
+        return ($parsed_url && $parsed_url === $server_host);
+    }
+
+    /**
      * Checks if a given string contains a URL protocol (http, https, ftp, etc.).
      *
      * @param string $string The string to check.
@@ -954,8 +1007,10 @@ class LCS_Request
         }
         $host = parse_url($string, PHP_URL_HOST);
 
-        if (empty($host)) {
-            return false;
+        // If no host is found, check if it's a localhost or domain-like pattern
+        if (!$host) {
+            // If the URL starts with "localhost" or a domain-like pattern, consider it having a host
+            return preg_match('/^(localhost|[\w-]+\.[\w-]+)/', $string);
         }
 
         // Check if host is a valid domain or IP address

@@ -74,7 +74,7 @@ class SymfonyMailer extends MailingConfigs
      *
      * If any header “From:” or “Reply-To:” is provided in the $headers array, it overrides the defaults.
      *
-     * @param string          $to           Recipient address, optionally with name: "email@example.com:Recipient Name".
+     * @param string|array          $to           Recipient address, optionally with name: "email@example.com:Recipient Name".
      * @param string          $subject      Email subject line.
      * @param string          $htmlBody     HTML content of the email.
      * @param string|string[] $headers      (Optional) One or more headers like "X-Custom-Header: Value".
@@ -85,18 +85,27 @@ class SymfonyMailer extends MailingConfigs
      *
      * @throws \InvalidArgumentException If recipient email is invalid or an attachment path does not exist.
      */
-    public function sendSymfony(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
+    public function sendSymfony(string|array $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
         // 1) Normalize headers and attachments into arrays
         $headersArray    = is_array($headers) ? $headers : (strlen(preg_replace('/\s+/', ' ', trim($headers))) > 0 ? [ $headers ] : []);
         $attachmentsList = is_array($attachments) ? $attachments : (strlen(trim($attachments)) > 0 ? [ $attachments ] : []);
 
         // 2) Parse recipient (email + optional name)
-        list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($to);
+        $toArray = !is_array($to) ? [$to] : $to;
+        $toAddresses = [];
+        foreach ( $toArray as $t ) {
+            list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+            // Set recipient
+            $toAddresses[] = $recipientEmail;
+        }
+        if (empty($toAddresses)) {
+            Logs::reportError("No valid recipient email address provided.", 2);
+        }
 
         // 3) Build Email object
         $email = (new Email())
-            ->to(new Address($recipientEmail, $recipientName))
+            ->to(...$toAddresses)
             ->subject($subject)
             ->html($htmlBody)
             ->text(strip_tags($htmlBody));
@@ -107,19 +116,15 @@ class SymfonyMailer extends MailingConfigs
 
         // 5) Process headersArray: if any “From:” or “Reply-To:”, override defaults; otherwise, collect as X-Headers
         foreach ($headersArray as $rawHeader) {
-            $cleanHeader = preg_replace('/\s+/', ' ', trim($rawHeader));
-            $lower = strtolower($cleanHeader);
-            if (strpos($lower, 'from:') === 0) {
-                // Format: "From: Name <email@example.com>" or "From: email@example.com:Name"
-                $parsed = MailingValidations::extractHeaderAddress(substr($rawHeader, 5));
-                if ($parsed !== false) {
-                    $fromAddress = [ $parsed['email'] => $parsed['name'] ];
-                }
-            } elseif (strpos($lower, 'reply-to:') === 0) {
-                $parsed = MailingValidations::extractHeaderAddress(substr($rawHeader, 9));
-                if ($parsed !== false) {
-                    $replyToAddress = [ $parsed['email'] => $parsed['name'] ];
-                }
+            $mailerHeaderData = MailingValidations::extractMailHeaders($rawHeader);
+            if (array_key_first($mailerHeaderData) === 'from') {
+                $parsedEmail = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
+                $parsedName = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $fromAddress = [ $parsedEmail => $parsedName ];
+            } elseif (array_key_first($mailerHeaderData) === 'reply-to') {
+                $parsedEmail = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
+                $parsedName = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $replyToAddress = [ $parsedEmail => $parsedName ];
             } else {
                 // Any other header: add as-is (e.g. "X-Custom-Header: Value")
                 // Symfony Mime\Email: ->getHeaders()->addTextHeader()

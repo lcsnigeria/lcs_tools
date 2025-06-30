@@ -61,7 +61,7 @@ class MailingValidations
      *   - "From: Full Name <username@example.com>"
      *   - "From: Full Name username@example.com"
      *   - "Custom-Header-Name: Value"
-     * Returns: [ 'From' => 'Full Name username@example.com', 'Custom-Header-Name' => 'Value', ... ]
+     * Returns: [ 'from' => 'Full Name username@example.com', 'custom-header-name' => 'Value', ... ]
      *
      * @param string $headerString
      * @return array
@@ -76,19 +76,17 @@ class MailingValidations
             if ($line === '') continue;
             if (strpos($line, ':') !== false) {
                 list($key, $value) = explode(':', $line, 2);
-                $key = trim($key);
+                $key = strtolower(trim($key));
                 $value = trim($value);
 
-                // For "From" header, normalize "Full Name <email>" or "Full Name email"
-                if (strtolower($key) === 'from') {
-                    // If "<...>" present, extract name and email
-                    if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
-                        $headers[$key] = trim($m[1]) . ' ' . trim($m[2]);
-                    } else {
-                        $headers[$key] = $value;
-                    }
+                // If "<...>" present, extract name and email
+                if (preg_match('/^(.+?)\s*<([^>]+)>$/', $value, $m)) {
+                    $nm = trim($m[1]);
+                    $em = trim($m[2]);
+                    $headers[$key] = empty($nm) ? $em : "$nm <$em>";
                 } else {
-                    $headers[$key] = $value;
+                    // Remove all '<' and '>' characters from the value
+                    $headers[$key] = preg_replace('/[<>]/', '', trim($value));
                 }
             }
         }
@@ -96,41 +94,83 @@ class MailingValidations
     }
 
     /**
-     * Given a header fragment (e.g. "John Doe <john@example.com>" or "john@example.com:John Doe"), 
-     * extracts [ 'email' => 'john@example.com', 'name' => 'John Doe' ] or returns false on failure.
+     * Extracts the email address from any string.
      *
-     * @param string $fragment
-     * @return array|false
+     * Examples:
+     *   "From: Full Name <username@example.com>" => "username@example.com"
+     *   "<username@example.com>" => "username@example.com"
+     *   "From:username@example.com" => "username@example.com"
+     *   "Full Name <username@example.com>" => "username@example.com"
+     *   "Full Name username@example.com" => "username@example.com"
+     *
+     * @param string $input
+     * @return string|null Returns the extracted email or null if not found.
      */
-    public static function extractHeaderAddress(string $fragment)
+    public static function extractAddress(string $input): ?string
     {
-        $fragment = trim($fragment);
+        // Try to match <email@example.com>
+        if (preg_match('/<\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\s*>/', $input, $m)) {
+            return $m[1];
+        }
+        // Try to match email after colon
+        if (preg_match('/:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/', $input, $m)) {
+            return $m[1];
+        }
+        // Try to match any email in the string
+        if (preg_match('/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/', $input, $m)) {
+            return $m[1];
+        }
+        return null;
+    }
 
-        // Case A: "Name <email@example.com>"
-        if (preg_match('/^(.+?)\s*<\s*([^>]+)\s*>$/', $fragment, $m)) {
-            $name  = trim($m[1]);
-            $email = trim($m[2]);
+    /**
+     * Extracts the name part from a string containing an email address.
+     *
+     * Examples:
+     *   "From: Full Name <username@example.com>" => "Full Name"
+     *   "<username@example.com>" => "username"
+     *   "From:username@example.com" => "username"
+     *   "Full Name <username@example.com>" => "Full Name"
+     *   "Full Name username@example.com" => "Full Name"
+     *
+     * @param string $input
+     * @return string|null Returns the extracted name or null if not found.
+     */
+    public static function extractAddressName(string $input): ?string
+    {
+        // Case: "Name <email@example.com>"
+        if (preg_match('/^.*?([^\s<:][^<:]*?)?\s*<\s*([a-zA-Z0-9._%+\-]+)@([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\s*>$/', $input, $m)) {
+            $name = trim($m[1] ?? '');
+            if ($name !== '') {
+                return $name;
+            }
+            // No name, return username part
+            return $m[2];
         }
-        // Case B: "email@example.com:Name"
-        elseif (strpos($fragment, ':') !== false) {
-            list($emailPart, $namePart) = explode(':', $fragment, 2);
-            $email = trim($emailPart);
-            $name  = trim($namePart);
+        // Case: "something:email@example.com"
+        if (preg_match('/:\s*([a-zA-Z0-9._%+\-]+)@([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/', $input, $m)) {
+            // Try to get name before colon
+            $parts = explode(':', $input, 2);
+            $before = trim($parts[0]);
+            if ($before !== '') {
+                return $before;
+            }
+            // No name, return username part
+            return $m[1];
         }
-        // Case C: Only an email
-        else {
-            $email = $fragment;
-            $name  = '';
+        // Case: "Name email@example.com"
+        if (preg_match('/^(.*?)\s+([a-zA-Z0-9._%+\-]+)@([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})$/', $input, $m)) {
+            $name = trim($m[1]);
+            if ($name !== '') {
+                return $name;
+            }
+            return $m[2];
         }
-
-        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return false;
+        // Case: just "email@example.com"
+        if (preg_match('/([a-zA-Z0-9._%+\-]+)@([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/', $input, $m)) {
+            return $m[1];
         }
-
-        return [
-            'email' => $email,
-            'name'  => $name,
-        ];
+        return null;
     }
 
     /**

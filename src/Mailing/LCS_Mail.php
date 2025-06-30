@@ -267,7 +267,7 @@ class LCS_Mail extends MailingConfigs
      * );
      * ```
      *
-     * @param string          $to           Recipient address, optionally with name: "email@example.com:Recipient Name".
+     * @param string|array          $to           Recipient address, optionally with name: "email@example.com:Recipient Name".
      * @param string          $subject      Email subject line.
      * @param string          $htmlBody     HTML content of the email.
      * @param string|array    $headers      (Optional) One or more headers like "X-Custom-Header: Value".
@@ -275,7 +275,7 @@ class LCS_Mail extends MailingConfigs
      *
      * @return bool  Returns true if the mailer did not throw any exception.
      */
-    public function send(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
+    public function send(string|array $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
         // Ensure mailer is initialized
         if (!$this->mailer) {
