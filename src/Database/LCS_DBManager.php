@@ -129,7 +129,7 @@ class LCS_DBManager {
         $this->options = $this->validate_options($options);
 
         // Establish the database connection
-        $this->connect_db();
+        $this->connect();
 
         // Set timezone if connected
         if ($this->is_connected()) {
@@ -188,10 +188,10 @@ class LCS_DBManager {
      *
      * @throws Exception If the connection fails or invalid credentials are provided.
      */
-    private function connect_db() {
+    private function connect() {
         // Disconnect if already connected
         if ($this->is_connected()) {
-            $this->disconnect_db();
+            $this->disconnect();
         }
 
         switch ($this->sql_manager) {
@@ -225,7 +225,7 @@ class LCS_DBManager {
     /**
      * Disconnects from the database and releases the connection.
      */
-    private function disconnect_db() {
+    public function disconnect() {
         if ($this->is_mysqli_manager()) {
             $this->connection->close();
         }
@@ -259,7 +259,7 @@ class LCS_DBManager {
         }
         $this->previous_sql_manager = $this->sql_manager;
         $this->sql_manager = $sql_manager;
-        $this->connect_db();
+        $this->connect();
     }
 
     /**
@@ -1447,7 +1447,7 @@ class LCS_DBManager {
      * Closes the database connection upon object destruction.
      */
     public function __destruct() {
-        $this->disconnect_db();
+        $this->disconnect();
     }
 }
 ?>

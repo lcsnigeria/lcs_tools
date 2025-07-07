@@ -19,7 +19,7 @@ class LCS_Date {
      *
      * @return string The appropriate greeting based on the current time.
      */
-    public function greetings(): string {
+    public static function greetings(): string {
         // Get the current hour in 24-hour format
         $currentHour = (int)date('H');
 
@@ -46,17 +46,16 @@ class LCS_Date {
      * @return mixed|string The current date or the specified part of it.
      *
      * @example
-     * $obj = new class { public function getDate($s = null, $t = false) { ... } };
-     * echo $obj->getDate();                    // Outputs: "2025-04-01 14:30:00" (full date/time)
-     * echo $obj->getDate('year');              // Outputs: "2025" (numeric year)
-     * echo $obj->getDate('month');             // Outputs: "04" (numeric month)
-     * echo $obj->getDate('month', true);       // Outputs: "April" (textual month)
-     * echo $obj->getDate('day');               // Outputs: "1" (numeric day)
-     * echo $obj->getDate('day', true);         // Outputs: "Tuesday" (textual day name)
-     * echo $obj->getDate('time');              // Outputs: "14:30:00" (current time)
-     * echo $obj->getDate('invalid');           // Outputs: "Tuesday" (default day name)
+     * echo ::getDate();                    // Outputs: "2025-04-01 14:30:00" (full date/time)
+     * echo ::getDate('year');              // Outputs: "2025" (numeric year)
+     * echo ::getDate('month');             // Outputs: "04" (numeric month)
+     * echo ::getDate('month', true);       // Outputs: "April" (textual month)
+     * echo ::getDate('day');               // Outputs: "1" (numeric day)
+     * echo ::getDate('day', true);         // Outputs: "Tuesday" (textual day name)
+     * echo ::getDate('time');              // Outputs: "14:30:00" (current time)
+     * echo ::getDate('invalid');           // Outputs: "Tuesday" (default day name)
      */
-    public function getDate($specification = null, $text_type = false) {
+    public static function getDate($specification = null, $text_type = false) {
         // Check if a specific part of the date is requested
         if ($specification !== null) {
             // Get the current date
@@ -125,14 +124,14 @@ class LCS_Date {
      * @throws \Exception If the input string is invalid or not parsable by DateTime.
      *
      * @example
-     *   $this->getRelativeDate();                              // returns current timestamp
-     *   $this->getRelativeDate('2 days');                      // timestamp two days from now
-     *   $this->getRelativeDate('2025/01/01', 'Y-m-d');         // '2025-01-01'
-     *   $this->getRelativeDate('next Friday', 'l');            // 'Friday'
-     *   $this->getRelativeDate('1 day', 'modern');             // '12-05-2025'
-     *   $this->getRelativeDate('now', 'standard with time');   // '2025-05-11 18:25:00'
+     *   ::getRelativeDate();                              // returns current timestamp
+     *   ::getRelativeDate('2 days');                      // timestamp two days from now
+     *   ::getRelativeDate('2025/01/01', 'Y-m-d');         // '2025-01-01'
+     *   ::getRelativeDate('next Friday', 'l');            // 'Friday'
+     *   ::getRelativeDate('1 day', 'modern');             // '12-05-2025'
+     *   ::getRelativeDate('now', 'standard with time');   // '2025-05-11 18:25:00'
      */
-    public function getRelativeDate($string = 'now', $format = 'getAsTime') {
+    public static function getRelativeDate($string = 'now', $format = 'getAsTime') {
         try {
             // Create a DateTime object from the input string
             $date = new \DateTime($string);
@@ -169,8 +168,8 @@ class LCS_Date {
      *
      * @return string The current year in numeric format.
      */
-    public function getYear(): string {
-        return $this->getDate('year');
+    public static function getYear(): string {
+        return self::getDate('year');
     }
 
     /**
@@ -179,8 +178,8 @@ class LCS_Date {
      * @param bool $text_type Optional. If true, returns the month in textual format (e.g., "April"); defaults to false (numeric).
      * @return string The current month in numeric or textual format.
      */
-    public function getMonth(bool $text_type = false): string {
-        return $this->getDate('month', $text_type);
+    public static function getMonth(bool $text_type = false): string {
+        return self::getDate('month', $text_type);
     }
 
     /**
@@ -189,8 +188,8 @@ class LCS_Date {
      * @param bool $text_type Optional. If true, returns the day in textual format (e.g., "Tuesday"); defaults to false (numeric).
      * @return string The current day in numeric or textual format.
      */
-    public function getDay(bool $text_type = false): string {
-        return $this->getDate('day', $text_type);
+    public static function getDay(bool $text_type = false): string {
+        return self::getDate('day', $text_type);
     }
 
     /**
@@ -198,8 +197,8 @@ class LCS_Date {
      *
      * @return string The current time in "HH:MM:SS" format.
      */
-    public function getTime(): string {
-        return $this->getDate('time');
+    public static function getTime(): string {
+        return self::getDate('time');
     }
 
     /**
@@ -207,7 +206,7 @@ class LCS_Date {
      *
      * @return string The name of the current day (e.g., "Monday").
      */
-    public function getDayName(): string {
+    public static function getDayName(): string {
         return date('l');
     }
 
@@ -216,7 +215,7 @@ class LCS_Date {
      *
      * @return int The number of days in the current month.
      */
-    public function getDaysInMonth(): int {
+    public static function getDaysInMonth(): int {
         return (int)date('t');
     }
 
@@ -226,8 +225,8 @@ class LCS_Date {
      * @param int|null $year Optional. The year to check. If null, the current year is used.
      * @return bool True if the given year or the current year is a leap year, false otherwise.
      */
-    public function isLeapYear(?int $year = null): bool {
-        $year = $year ?? (int)$this->getYear();
+    public static function isLeapYear(?int $year = null): bool {
+        $year = $year ?? (int)self::getYear();
         return ($year % 4 === 0 && $year % 100 !== 0) || ($year % 400 === 0);
     }
 
@@ -242,7 +241,7 @@ class LCS_Date {
      * @param bool $compareWithTime Optional. If true, returns the difference in seconds; defaults to false (days).
      * @return int The absolute difference between the two dates, in days or seconds based on $compareWithTime.
      */
-    public function getDateDifference(string $date1, string $date2, bool $compareWithTime = false): int {
+    public static function getDateDifference(string $date1, string $date2, bool $compareWithTime = false): int {
         $datetime1 = new \DateTime($date1);
         $datetime2 = new \DateTime($date2);
         
@@ -266,8 +265,8 @@ class LCS_Date {
      * @param string $date2 The second date in "YYYY-MM-DD" format.
      * @return int The absolute difference between the two dates in seconds.
      */
-    public function getTimeDifference(string $date1, string $date2): int {
-        return $this->getDateDifference($date1, $date2, true);
+    public static function getTimeDifference(string $date1, string $date2): int {
+        return self::getDateDifference($date1, $date2, true);
     }
 
     /**
@@ -277,7 +276,7 @@ class LCS_Date {
      * @param int $days The number of days to add.
      * @return string The resulting date in "YYYY-MM-DD" format (if no time provided) or "YYYY-MM-DD HH:MM:SS" (if time included).
      */
-    public function addDaysToDate(string $date, int $days): string {
+    public static function addDaysToDate(string $date, int $days): string {
         $datetime = new \DateTime($date);
         $datetime->modify("+$days days");
         // Check if original input included time; adjust output format accordingly
@@ -291,7 +290,7 @@ class LCS_Date {
      * @param int $days The number of days to subtract.
      * @return string The resulting date in "YYYY-MM-DD" format (if no time provided) or "YYYY-MM-DD HH:MM:SS" (if time included).
      */
-    public function subtractDaysFromDate(string $date, int $days): string {
+    public static function subtractDaysFromDate(string $date, int $days): string {
         $datetime = new \DateTime($date);
         $datetime->modify("-$days days");
         // Check if original input included time; adjust output format accordingly

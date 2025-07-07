@@ -101,6 +101,18 @@ class LCS_Request
     }
 
     /**
+     * Checks if a session variable is set.
+     *
+     * @param string $key The session variable name.
+     * @return bool True if the session variable is set, false otherwise.
+     */
+    public function isset_session_var(string $key): bool
+    {
+        $this->start_session();
+        return isset($_SESSION[$key]);
+    }
+
+    /**
      * Starts a session if not already active.
      *
      * @return bool True if session started or already active.
