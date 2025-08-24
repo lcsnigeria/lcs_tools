@@ -317,7 +317,7 @@ class LCS_StringOps {
      * @param string $string The input string from which to extract numbers.
      * @param bool $all Optional. If true, returns all numbers found in the string. Default is false.
      *
-     * @return array|null Returns an array of numbers if $all is true, otherwise returns the first number found, or null if no numbers are found.
+     * @return mixed Returns an array of numbers if $all is true, otherwise returns the first number found, or null if no numbers are found.
      */
     public static function getNumber($string, $all = false) {
         // Use preg_match_all to find all numbers in the string
@@ -494,6 +494,65 @@ class LCS_StringOps {
         }
 
         return $metadata;
+    }
+
+
+    /**
+     * Generates an XML sitemap for a given base URL and an array of pages.
+     *
+     * This function creates an XML sitemap containing the base URL (homepage) 
+     * and additional pages if provided. The sitemap is formatted according to 
+     * the standard sitemap.org schema, allowing search engines to crawl the site.
+     *
+     * @param string $base_url The base URL of the website (e.g., 'https://www.example.com/').
+     * @param array $pages An optional array of page paths to include in the sitemap. 
+     *                     If empty, only the homepage will be included.
+     * @return string|false The XML string representing the sitemap, or false if validation fails.
+     * @throws Exception if the base URL is invalid or if any page in the array is not a string.
+     */
+    public static function generateSitemap($base_url, $pages = []) {
+        // Validate the base URL
+        if (!filter_var($base_url, FILTER_VALIDATE_URL)) {
+            throw new \Exception("Invalid base URL: $base_url");
+            return false;
+        }
+
+        // Validate that all pages are strings
+        if (!empty($pages)) {
+            foreach ($pages as $page) {
+                if (!is_string($page)) {
+                    throw new \Exception("Invalid page value: All pages must be strings.");
+                    return false;
+                }
+            }
+        }
+
+        // Initialize the XML output with the required header and root element
+        $sitemap = '<?xml version="1.0" encoding="UTF-8"?>';
+        $sitemap .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
+
+        // Add the homepage
+        $sitemap .= '<url>';
+        $sitemap .= '<loc>' . htmlspecialchars($base_url) . '</loc>';
+        $sitemap .= '<changefreq>daily</changefreq>';
+        $sitemap .= '<priority>1.0</priority>';
+        $sitemap .= '</url>';
+
+        // Add each additional page if provided
+        if (!empty($pages)) {
+            foreach ($pages as $page) {
+                $sitemap .= '<url>';
+                $sitemap .= '<loc>' . htmlspecialchars($base_url . $page) . '</loc>';
+                $sitemap .= '<changefreq>weekly</changefreq>';
+                $sitemap .= '<priority>0.8</priority>';
+                $sitemap .= '</url>';
+            }
+        }
+
+        // Close the root element
+        $sitemap .= '</urlset>';
+
+        return $sitemap;
     }
 
 

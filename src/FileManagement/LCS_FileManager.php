@@ -231,13 +231,13 @@ class LCS_FileManager {
      * @param int|null $time_limit Optional. Custom execution time limit in seconds.
      *                             If not provided, the `$time_limit` property will be used.
      */
-    public function __construct(int|null $time_limit = null)
+    public function __construct(?int $time_limit = null)
     {
         // Store the current max execution time
-        $this->previous_time_limit = ini_get('max_execution_time');
+        $this->previous_time_limit = empty(ini_get('max_execution_time')) ? 300 : ini_get('max_execution_time');
 
         // Allow overriding the default time limit via parameter
-        if ($time_limit !== null) {
+        if ($time_limit) {
             $this->time_limit = $time_limit;
         }
 
@@ -429,6 +429,225 @@ class LCS_FileManager {
         }
 
         return $fileNames;
+    }
+
+    /**
+     * Retrieves the content of a file or multiple files, with optional streaming and base64 encoding.
+     *
+     * If $file is null, uses $this->file or $this->file_path. Supports both file paths and normalized file arrays.
+     * If $stream is true, reads file contents in chunks to reduce memory usage (recommended for large files).
+     * If $asBase64 is true, encodes the file content(s) in base64 (useful for JSON or HTML embedding).
+     * 
+     * @param string|array|null $file The file path or file array. If null, uses $this->file or $this->file_path.
+     * @param bool $stream If true, streams file contents in chunks; otherwise, loads entire file into memory.
+     * @param bool $asBase64 If true, returns base64-encoded content(s).
+     * @return string|array The file content(s) as raw binary data or base64-encoded string(s).
+     * @throws \Exception If the file does not exist or is invalid.
+     */
+    public function getFileContents($file = null, $stream = false, $asBase64 = false) {
+        if (is_null($file) || empty($file)) {
+            if ($this->file) {
+                $file = $this->file;
+            } elseif ($this->file_path) {
+                $file = $this->file_path;
+            } else {
+                throw new \Exception("No file parameter provided and no default file available.");
+            }
+        }
+
+        if (is_array($file)) {
+            $file = $this->normalizeFiles($file);
+            $contents = [];
+            foreach ($file as $f) {
+                $path = $f['tmp_name'] ?? null;
+                if (!$path || !file_exists($path)) {
+                    throw new \Exception("File does not exist: " . ($f['name'] ?? 'unknown'));
+                }
+                $data = $stream ? $this->streamFileContents($path) : file_get_contents($path);
+                $contents[] = $asBase64 ? base64_encode($data) : $data;
+            }
+            return $contents;
+        } elseif (is_string($file)) {
+            if (!file_exists($file)) {
+                throw new \Exception("File does not exist: " . $file);
+            }
+            $data = $stream ? $this->streamFileContents($file) : file_get_contents($file);
+            return $asBase64 ? base64_encode($data) : $data;
+        } else {
+            throw new \Exception("Invalid file parameter provided.");
+        }
+    }
+
+    /**
+     * Streams the contents of a file in chunks to reduce memory usage.
+     *
+     * Opens the file in binary mode and reads it in 512KB chunks until EOF.
+     * Recommended for large files to avoid loading the entire file into memory.
+     *
+     * @param string $filePath The path to the file to stream.
+     * @return string The streamed file contents as a binary string.
+     * @throws \Exception If the file cannot be opened.
+     */
+    private function streamFileContents($filePath) {
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            throw new \Exception("Failed to open file for streaming: $filePath");
+        }
+        $contents = '';
+        while (!feof($handle)) {
+            $contents .= fread($handle, 1024 * 512); // 512KB chunks
+        }
+        fclose($handle);
+        return $contents;
+    }
+
+    /**
+     * Reads a directory and returns structured information.
+     *
+     * @param string $path Path to the directory to scan.
+     * @param array $exclude List of subdirectories to exclude (by name).
+     * @param bool $returnFullPath Whether to return full path for files/dirs.
+     * @return array Associative array containing:
+     *               - first_file: First file found in the directory (or null if none)
+     *               - first_dir: First subdirectory found in the directory (or null if none)
+     *               - files: List of files directly inside the directory
+     *               - total_files: List of all files in the directory and its subdirectories (excluding excluded ones)
+     *               - total_dirs: List of all directories in the path and its subdirectories (excluding excluded ones)
+     */
+    public function readDir(string $path, array $exclude = [], bool $returnFullPath = false): array
+    {
+        $result = [
+            'first_file'  => null,
+            'first_dir'   => null,
+            'files'       => [],
+            'total_files' => [],
+            'total_dirs'   => []
+        ];
+
+        if (!is_dir($path)) {
+            return $result; // Return empty if path is invalid
+        }
+
+        // Scan only current directory level
+        $entries = scandir($path);
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $fullPath = $path . DIRECTORY_SEPARATOR . $entry;
+
+            if (is_file($fullPath)) {
+                if ($result['first_file'] === null) {
+                    $result['first_file'] = $returnFullPath ? $fullPath : $entry;
+                }
+                $result['files'][] = $returnFullPath ? $fullPath : $entry;
+            } elseif (is_dir($fullPath)) {
+                // Skip excluded directories
+                if (in_array($entry, $exclude, true)) {
+                    continue;
+                }
+                if ($result['first_dir'] === null) {
+                    $result['first_dir'] = $returnFullPath ? $fullPath : $entry;
+                }
+            }
+        }
+
+        // Gather all files recursively
+        $result['total_files'] = $this->getFiles($path, $exclude, $returnFullPath);
+
+        // Gather all directories recursively
+        $result['total_dirs'] = $this->getDirs($path, $exclude, $returnFullPath);
+
+        return $result;
+    }
+
+    /**
+     * Recursively retrieves all directories in a path.
+     *
+     * @param string $dir Path to directory.
+     * @param array $exclude List of subdirectories to exclude (by name).
+     * @param bool $returnFullPath Whether to return full path of directories.
+     * @return array List of directory names or full paths.
+     */
+    public function getDirs(string $dir, array $exclude = [], bool $returnFullPath = false): array
+    {
+        $dirs = [];
+
+        if (!is_dir($dir)) {
+            return $dirs;
+        }
+
+        $directoryIterator = new \RecursiveDirectoryIterator(
+            $dir,
+            \RecursiveDirectoryIterator::SKIP_DOTS
+        );
+
+        $filter = new \RecursiveCallbackFilterIterator(
+            $directoryIterator,
+            function ($current) use ($exclude) {
+                if ($current->isDir() && in_array($current->getFilename(), $exclude, true)) {
+                    return false;
+                }
+                return true;
+            }
+        );
+
+        $iterator = new \RecursiveIteratorIterator($filter, \RecursiveIteratorIterator::SELF_FIRST);
+
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                $dirs[] = $returnFullPath ? $item->getPathname() : $item->getFilename();
+            }
+        }
+
+        return $dirs;
+    }
+
+    /**
+     * Recursively retrieves all files in a directory, with option to exclude subdirectories.
+     *
+     * @param string $dir Path to directory.
+     * @param array $exclude List of subdirectories to exclude (by name).
+     * @param bool $returnFullPath Whether to return full path of files (default: false).
+     * @return array List of file names or full paths depending on $returnFullPath.
+     */
+    public function getFiles(string $dir, array $exclude = [], bool $returnFullPath = false): array
+    {
+        $files = [];
+
+        if (!is_dir($dir)) {
+            return $files;
+        }
+
+        $directoryIterator = new \RecursiveDirectoryIterator(
+            $dir,
+            \RecursiveDirectoryIterator::SKIP_DOTS
+        );
+
+        // Wrap with filter to exclude specified directories
+        $filter = new \RecursiveCallbackFilterIterator(
+            $directoryIterator,
+            function ($current) use ($exclude) {
+                if ($current->isDir() && in_array($current->getFilename(), $exclude, true)) {
+                    return false;
+                }
+                return true;
+            }
+        );
+
+        $iterator = new \RecursiveIteratorIterator($filter);
+
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $files[] = $returnFullPath
+                    ? $file->getPathname()   // Full path
+                    : $file->getFilename(); // Only filename
+            }
+        }
+
+        return $files;
     }
 
     /**

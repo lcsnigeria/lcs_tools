@@ -3,7 +3,7 @@
         'name' => 'lcsng/tools',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'd7cc8053d2e8418aa7522e0293a1d2acaed33d8b',
+        'reference' => '61a5faa5e5a7e18ceddde7f38711e86b08041f52',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -121,7 +121,7 @@
         'lcsng/tools' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'd7cc8053d2e8418aa7522e0293a1d2acaed33d8b',
+            'reference' => '61a5faa5e5a7e18ceddde7f38711e86b08041f52',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -154,6 +154,15 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
+        'matomo/device-detector' => array(
+            'pretty_version' => '6.4.6',
+            'version' => '6.4.6.0',
+            'reference' => '6f07f615199851548db47a900815d2ea2cdcde08',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../matomo/device-detector',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
         'minishlink/web-push' => array(
             'pretty_version' => 'v9.0.2',
             'version' => '9.0.2.0',
@@ -169,6 +178,15 @@
             'reference' => '10d85740180ecba7896c87e06a166e0c95a0e3b6',
             'type' => 'library',
             'install_path' => __DIR__ . '/../monolog/monolog',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'mustangostang/spyc' => array(
+            'pretty_version' => '0.6.3',
+            'version' => '0.6.3.0',
+            'reference' => '4627c838b16550b666d15aeae1e5289dd5b77da0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../mustangostang/spyc',
             'aliases' => array(),
             'dev_requirement' => false,
         ),
@@ -297,6 +315,12 @@
             'install_path' => __DIR__ . '/../phpseclib/phpseclib',
             'aliases' => array(),
             'dev_requirement' => false,
+        ),
+        'piwik/device-detector' => array(
+            'dev_requirement' => false,
+            'replaced' => array(
+                0 => '6.4.6',
+            ),
         ),
         'psr/cache' => array(
             'pretty_version' => '3.0.0',

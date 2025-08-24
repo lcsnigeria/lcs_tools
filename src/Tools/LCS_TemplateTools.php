@@ -1,6 +1,8 @@
 <?php
 namespace lcsTools\Tools;
 
+use lcsTools\FileManagement\LCS_FileManager;
+
 /**
  * Class TemplateTools
  *
@@ -245,20 +247,57 @@ class LCS_TemplateTools
     /**
      * Generates the HTML block for file management, including file listing and editor.
      *
-     * @param string $fileDir The directory path to list and manage files.
+     * @param string $fileOrDir The directory path to list and manage files or file path.
+     * @param array $configData Configuration options for the block (e.g. ['expandable' => true]).
      * @return string The HTML output for the file management block.
      */
-    public static function fileManagementBlock($fileDir): string {
+    public static function fileManagementBlock($fileOrDir, array $configData = []): string {
+        // Check if is file
+        $isFile = is_file($fileOrDir);
+
+        // Check if directory
+        $isDir = is_dir($fileOrDir);
+
+        // Throw error if neither file nor directory exists
+        if (!$isFile && !$isDir) {
+            throw new \Exception("The path '$fileOrDir' is neither a valid file nor a directory.");
+        }
+
+        // Ensure user specify id
+        if (empty($configData['id'])) {
+            throw new \Exception("The 'id' configuration is required for the file management block.");
+        }
+
+        // Set defaults
+        $expandable = isset($configData['expandable']) && $configData['expandable'] === true ? true : false;
+        $shouldListDirs = isset($configData['listDirectory']) && $configData['listDirectory'] === true ? true : false;
+        $shouldPreviewFile = isset($configData['previewFile']) && $configData['previewFile'] === true ? true : false;
+        $sensitiveDirectory = isset($configData['sensDir']) && !empty($configData['sensDir']) ? strval($configData['sensDir']) : '';
+
         // Initialize the output
         $output = '';
 
         // Display the public assets list
-        $output .= '<div class="lcsFileManagement">';
-        $output .= '<div class="lcsFileListingWrapper">';
-        $output .= '<div class="lcsFileListing">';
-        $output .= lcs_list_dirs_data($fileDir);
-        $output .= '</div>';
-        $output .= '</div>';
+        $output .= '<div class="lcsFileManagement" id="' . htmlspecialchars($configData['id']) . '">';
+
+        // Overhead Bar
+        $output .= '<div class="_overhead_bar">';
+        if ($expandable) { // Expander
+            $output .= '<button type="button" class="_editor_expander" title="Expand/Collapse Editor" onclick="lcsToggleEditorExpand(this)"><i class="fa fa-expand"></i></button>';
+        }
+        $output .= '<div class="_code_action_buttons">'; // Action buttons
+        $output .= '<button type="button" id="_save_file_content">Save</button>'; // Save code
+        $output .= '</div>'; // End Action button
+        $output .= '</div>'; // End Overhead Bar
+
+        // List files & directory
+        if ($isDir && $shouldListDirs) {
+            $output .= '<div class="lcsFileListingWrapper">';
+            $output .= '<div class="lcsFileListing">';
+            $output .= LCS_DirOps::listDirData($fileOrDir, $sensitiveDirectory);
+            $output .= '</div>';
+            $output .= '</div>';
+        }
 
         // Display the file editor
         $output .= '<div class="lcsFileEditorWrapper">';
@@ -266,25 +305,47 @@ class LCS_TemplateTools
 
         // File editor header
         $output .= '<div class="_editor_header">';
-        // Language mode selector
-        $output .= '<select id="_editor_language_selector" aria-label="Select a Language" onchange="lcsSwitchCodeLanguage(this.value)">';
-        $output .= '    <option value="php">PHP</option>';
-        $output .= '    <option value="javascript">JavaScript</option>';
-        $output .= '    <option value="html">HTML</option>';
-        $output .= '    <option value="css">CSS</option>';
-        $output .= '</select>';
         $output .= '</div>';
+
+        $jsOutput = '';
+        if ($shouldPreviewFile) {
+            if ($isFile) {
+                $initialFile = $fileOrDir;
+            } else {
+                $fileManager = new LCS_FileManager();
+                $dirData = $fileManager->readDir($fileOrDir, [], true);
+                if (empty($dirData['total_files']) || $dirData['total_files'] == 0) {
+                    throw new \Exception("The directory '$fileOrDir' has no file to preview.");
+                }
+                $initialFile = $dirData['total_files'][0];
+            }
+
+            $initialFileClipped = pathinfo($initialFile, PATHINFO_FILENAME) . '.' . pathinfo($initialFile, PATHINFO_EXTENSION);
+            $fileName = json_encode(preg_replace('/\.$/', '', $initialFileClipped), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            
+            $nSD = LCS_DirOps::normalizePath($sensitiveDirectory);
+            $niF = LCS_DirOps::normalizePath($initialFile);
+
+            $filePath = json_encode(str_replace($nSD, '', $niF), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            $initialFileContents = json_encode($fileManager->getFileContents($initialFile, false, false), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $fileExtension = json_encode(pathinfo($initialFile, PATHINFO_EXTENSION) ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $jsOutput = <<<HTML
+            <script>
+                document.addEventListener("DOMContentLoaded", async() => {
+                    await lcsInitializeMonacoEditor($initialFileContents, $filePath, $fileName, $fileExtension);
+                });
+            </script>
+            HTML;
+        }
 
         // File editor body
         $output .= '<div class="_editor_body">';
-        $output .= '<textarea id="lcsFile_editor" class="_file_editor" placeholder="Select a file from the list to edit"></textarea>';
         $output .= '</div>';
 
         // File editor footer
         $output .= '<div class="_editor_footer">';
-        $output .= '<div class="_code_action_buttons">';
-        $output .= '<button type="button" class="_save_file_content">Save</button>';
-        $output .= '</div>';
+        $output .= $jsOutput;
         $output .= '</div>';
 
         $output .= '</div>';

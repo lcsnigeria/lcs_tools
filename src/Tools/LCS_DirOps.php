@@ -133,4 +133,166 @@ class LCS_DirOps
             }
         }
     }
+
+    /**
+     * Generates an HTML nested list representing the files and directories within a specified directory.
+     *
+     * Traverses the given directory path, recursively listing all files and subdirectories.
+     * Optionally, a sensitive directory path can be provided to highlight or handle specific directories differently.
+     *
+     * @param string $directory         Absolute or relative path to the directory to be listed.
+     * @param string $sensitiveDirectory Optional path to a directory that should be treated as sensitive (e.g., for highlighting or exclusion).
+     * @return string                   HTML markup of the directory contents as a nested list, or a message if the directory is invalid or empty.
+     */
+    public static function listDirData( string $directory, string $sensitiveDirectory = '' ) :string {
+        if (!is_dir($directory)) {
+            return '<p>The provided path is not a directory or does not exist.</p>';
+        }
+
+        // Use the listing and rendering functions
+        $items = self::getDirData($directory, $sensitiveDirectory);
+
+        if (!empty($items)) {
+            return self::renderDirDataList($items);
+        } else {
+            return '<p>No files or directories found.</p>';
+        }
+    }
+
+    /**
+     * Recursively retrieves detailed information about all files and directories within a specified directory.
+     *
+     * This method traverses the given directory and its subdirectories, returning a structured array
+     * that describes each file and directory found. The returned array contains metadata for each item,
+     * including its name, normalized path, type, and, for directories, their children.
+     *
+     * @param string $directory The absolute or relative path to the directory to scan.
+     * @param string $sensitiveDirectory (Optional) A directory path to be treated as sensitive, which may affect path normalization or filtering.
+     * @return array An array of associative arrays, each representing a file or directory with the following keys:
+     *               - 'name': string - The name of the file or directory.
+     *               - 'path': string - The normalized full path to the item, relative to one directory above the server root.
+     *               - 'type': string - Either 'file' or 'directory'.
+     *               - 'children': array (optional) - If the item is a directory, contains an array of its children in the same format.
+     */
+    public static function getDirData(string $directory, string $sensitiveDirectory = ''): array {
+        if (!is_dir($directory)) {
+            return []; // Return empty if the directory is invalid
+        }
+
+        // Get one directory above the server root
+        $serverRoot = realpath($_SERVER['DOCUMENT_ROOT'] . '/..'); // Go up one directory
+        $serverRoot = str_replace('\\', '/', $serverRoot); // Normalize server root
+
+        $sensDir = !empty($sensitiveDirectory) ? strval($sensitiveDirectory) : $serverRoot;
+
+        $directory = str_replace('\\', '/', realpath($directory)); // Normalize input directory
+
+        $files = scandir($directory); // Fetch all items in the directory
+        $result = [];
+
+        foreach ($files as $file) {
+            // Exclude "." and ".."
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+
+            // Get the full path to the file or directory
+            $file_path = realpath($directory . DIRECTORY_SEPARATOR . $file);
+
+            // Skip invalid paths
+            if ($file_path === false) {
+                continue;
+            }
+
+            // Normalize the path and make it relative to one directory above the server root
+            $normalized_path = self::normalizePath($file_path);
+            $normalized_sens_dir = self::normalizePath($sensDir);
+            $relative_path = str_replace($normalized_sens_dir, '', $normalized_path);
+
+            // Create an item for the file or directory
+            $item = [
+                'name' => $file,
+                'path' => $relative_path,
+                'type' => is_dir($file_path) ? 'directory' : 'file',
+            ];
+
+            // Set the file extension if it's a file
+            if ($item['type'] === 'file') {
+                $item['file_extension'] = pathinfo($file_path, PATHINFO_EXTENSION);
+            }
+
+            // If it's a directory, recursively fetch its contents
+            if ($item['type'] === 'directory') {
+                $item['children'] = self::getDirData($file_path, $sensitiveDirectory);
+            }
+
+            $result[] = $item;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Normalizes a file or directory path by resolving it to its absolute path and converting backslashes to forward slashes.
+     *
+     * @param string $path The file or directory path to normalize.
+     * @return string|false The normalized absolute path, or false if the path does not exist.
+     */
+    public static function normalizePath($path) {
+        $realPath = realpath($path);
+        if ($realPath === false) {
+            return false;
+        }
+        return str_replace('\\', '/', $realPath);
+    }
+
+    /**
+     * Renders files and directories as a nested HTML unordered list.
+     *
+     * @param array $items An array of files and directories as returned by `lcs_get_dirs_data`.
+     * @return string The HTML representation of the files and directories as a nested list.
+     */
+    public static function renderDirDataList( array $items ) :string {
+        if (empty($items)) {
+            return '';
+        }
+
+        $html = '<ul>';
+        foreach ($items as $item) {
+            // Use different icons for directories and files
+            $icon = $item['type'] === 'directory' ? '📁' : '📄';
+            
+            // Add a class for directories and files
+            $liClassName = $item['type'] === 'directory' ? 'lcs_dir_data_item lcs_dir_item' : 'lcs_dir_data_item lcs_file_item';
+            $liClassName .= $item['type'] === 'directory' && !empty($item['children']) 
+            ? ' _has_children' : '';
+
+            // Get the file path
+            $filePath = $item['path'];
+
+            // Get the file extension if it's a file
+            $fileExtension = $item['type'] === 'file' ? $item['file_extension'] : '';
+
+            // Set data attributes for the file extension if it's a file and $fileExtension is not empty
+            $fileExtensionDataSet = '';
+            if ($item['type'] === 'file' && !empty($fileExtension)) {
+                $fileExtensionDataSet = ' data-file_extension="' . $fileExtension . '"';
+            }
+
+            // Display directory/file name
+            $html .= '<li class="' . $liClassName . '" data-file_path="' . $filePath . '" ' . $fileExtensionDataSet . '>';
+            $html .= $icon . ' ' . htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8');
+
+            // If it's a directory and has children, recursively render them
+            if ($item['type'] === 'directory' && !empty($item['children'])) {
+                $html .= self::renderDirDataList($item['children']);
+            }
+
+            $html .= '</li>';
+        }
+        $html .= '</ul>';
+
+        return $html;
+    }
+
 }

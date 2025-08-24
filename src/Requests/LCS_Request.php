@@ -1,12 +1,16 @@
 <?php
 namespace lcsTools\Requests;
 
+use lcsTools\Requests\Traits\LCS_UserDevice;
+
 /**
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 
  * and handling error reporting.
  */
 class LCS_Request
 {
+    use LCS_UserDevice;
+
     /** @var bool Whether to report errors as exceptions */
     public $throwErrors;
 
@@ -21,6 +25,20 @@ class LCS_Request
     public function __construct(bool $throwErrors = false)
     {
         $this->throwErrors = $throwErrors;
+
+        $this->initInstance();
+    }
+
+    /**
+     * Initializes the request instance by setting Accept-CH headers.
+     *
+     * This method is called from the constructor to set client hints headers.
+     *
+     * @return void
+     */
+    private function initInstance(): void
+    {
+        header('Accept-CH: Sec-CH-UA, Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Mobile');
     }
 
     /**
@@ -478,7 +496,7 @@ class LCS_Request
         if (headers_sent()) {
             error_log("Headers already sent. Cannot send JSON response.");
             // Respond with a fallback error
-            echo json_encode(['success' => false, 'error' => 'Internal server error']);
+            echo json_encode(['success' => false, 'data' => 'Internal server error']);
             exit;
         }
 
@@ -492,7 +510,7 @@ class LCS_Request
             // Handle JSON encoding errors
             error_log("JSON encoding error: " . json_last_error_msg());
             // Respond with a JSON encoding error message
-            $json_data = json_encode(['success' => false, 'error' => 'JSON encoding error']);
+            $json_data = json_encode(['success' => false, 'data' => 'JSON encoding error']);
             http_response_code(500); // Internal Server Error for JSON encoding issues
         }
 
@@ -580,60 +598,74 @@ class LCS_Request
     }
 
     /**
-     * Retrieves and parses the User-Agent string of the client.
+     * Retrieves and parses the client's User-Agent string.
      *
-     * This function attempts to get the client's User-Agent string and provides
-     * basic information about the client, such as the browser, platform, and device type.
+     * This method uses basic pattern matching and the LCS_UserDevice utility to extract
+     * browser, platform, and device type details. It also enhances output by returning
+     * advanced device information (brand, model, OS, browser) via DeviceDetector.
      *
-     * @return array An associative array containing the User-Agent string, browser, platform, and device type.
+     * @return array An associative array containing:
+     *               - user_agent: Raw User-Agent string.
+     *               - browser_name: Detected browser name.
+     *               - platform_name: Detected operating system.
+     *               - device_type: Basic device classification (Desktop, Mobile, Tablet).
+     *               - device_info: Full parsed details (brand, model, OS, browser, etc.).
+     *               - device_summary: Concise readable string for UI or logs.
      */
-    public function get_user_agent(): array {
-        // Retrieve the User-Agent string from the server
-        $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? trim($_SERVER['HTTP_USER_AGENT']) : 'UNKNOWN';
+    public function get_user_agent(): array
+    {
+        // Raw user agent string
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN';
 
-        // Browser detection
+        // Basic browser detection
         $browser = 'Unknown Browser';
-        if ($this->contains('MSIE', $user_agent) || $this->contains('Trident/', $user_agent)) {
+        if ($this->contains('MSIE', $userAgent) || $this->contains('Trident/', $userAgent)) {
             $browser = 'Internet Explorer';
-        } elseif ($this->contains('Edge', $user_agent)) {
+        } elseif ($this->contains('Edge', $userAgent)) {
             $browser = 'Microsoft Edge';
-        } elseif ($this->contains('Firefox', $user_agent)) {
+        } elseif ($this->contains('Firefox', $userAgent)) {
             $browser = 'Mozilla Firefox';
-        } elseif ($this->contains('Chrome', $user_agent) && !$this->contains('Edge', $user_agent)) {
+        } elseif ($this->contains('Chrome', $userAgent) && !$this->contains('Edge', $userAgent)) {
             $browser = 'Google Chrome';
-        } elseif ($this->contains('Safari', $user_agent) && !$this->contains('Chrome', $user_agent)) {
+        } elseif ($this->contains('Safari', $userAgent) && !$this->contains('Chrome', $userAgent)) {
             $browser = 'Apple Safari';
-        } elseif ($this->contains('Opera', $user_agent) || $this->contains('OPR', $user_agent)) {
+        } elseif ($this->contains('Opera', $userAgent) || $this->contains('OPR', $userAgent)) {
             $browser = 'Opera';
         }
 
-        // Platform detection
+        // Basic platform detection
         $platform = 'Unknown Platform';
-        if ($this->contains('Windows', $user_agent)) {
+        if ($this->contains('Windows', $userAgent)) {
             $platform = 'Windows';
-        } elseif ($this->contains('Macintosh', $user_agent) || $this->contains('Mac OS X', $user_agent)) {
+        } elseif ($this->contains('Macintosh', $userAgent) || $this->contains('Mac OS X', $userAgent)) {
             $platform = 'Mac OS';
-        } elseif ($this->contains('Linux', $user_agent)) {
+        } elseif ($this->contains('Linux', $userAgent)) {
             $platform = 'Linux';
-        } elseif ($this->contains('Android', $user_agent)) {
+        } elseif ($this->contains('Android', $userAgent)) {
             $platform = 'Android';
-        } elseif ($this->contains('iPhone', $user_agent) || $this->contains('iPad', $user_agent)) {
+        } elseif ($this->contains('iPhone', $userAgent) || $this->contains('iPad', $userAgent)) {
             $platform = 'iOS';
         }
 
-        // Device type detection (basic)
-        $device_type = 'Desktop';
-        if ($this->contains('Mobi', $user_agent)) {
-            $device_type = 'Mobile';
-        } elseif ($this->contains('Tablet', $user_agent) || $this->contains('iPad', $user_agent)) {
-            $device_type = 'Tablet';
+        // Basic device type detection
+        $deviceType = 'Desktop';
+        if ($this->contains('Mobi', $userAgent)) {
+            $deviceType = 'Mobile';
+        } elseif ($this->contains('Tablet', $userAgent) || $this->contains('iPad', $userAgent)) {
+            $deviceType = 'Tablet';
         }
 
+        // Advanced detection using DeviceDetector
+        $deviceInfo = $this->getDeviceInfo();
+        $deviceSummary = $this->getFormattedDeviceInfo();
+
         return [
-            'user_agent' => $user_agent,
-            'browser' => $browser,
-            'platform' => $platform,
-            'device_type' => $device_type
+            'user_agent'     => $userAgent,
+            'browser_name'   => $browser,
+            'platform_name'  => $platform,
+            'device_type'    => $deviceType,
+            'device_info'    => $deviceInfo,
+            'device_summary' => $deviceSummary
         ];
     }
 
