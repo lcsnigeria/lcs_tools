@@ -1,8 +1,8 @@
 <?php
-namespace lcsTools\Creds;
+namespace LCSNG\Tools\Creds;
 
 // Include the LCS_Hook class for managing hooks
-use lcsTools\Hooks\LCS_Hook;
+use LCSNG\Tools\Hooks\LCS_Hook;
 
 /**
  * Class LCS_Creds

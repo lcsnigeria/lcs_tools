@@ -1,5 +1,5 @@
 <?php
-namespace lcsTools\Debugging;
+namespace LCSNG\Tools\Debugging;
 
 use Exception;
 

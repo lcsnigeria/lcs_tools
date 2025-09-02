@@ -1,6 +1,6 @@
 <?php
-use lcsTools\Debugging\Logs;
-use lcsTools\Mailing\MailingValidations;
+use LCSNG\Tools\Debugging\Logs;
+use LCSNG\Tools\Mailing\MailingValidations;
 
 /**
  * Class PHPMailer

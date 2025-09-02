@@ -1,7 +1,7 @@
 <?php
-namespace lcsTools\DataValidation;
+namespace LCSNG\Tools\DataValidation;
 
-use lcsTools\DataValidation\LCS_InputSanitizer;
+use LCSNG\Tools\DataValidation\LCS_InputSanitizer;
 
 class LCS_InputValidation 
 {

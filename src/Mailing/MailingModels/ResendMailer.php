@@ -1,8 +1,8 @@
 <?php
-namespace lcsTools\Mailing;
+namespace LCSNG\Tools\Mailing;
 
-use lcsTools\Debugging\Logs;
-use lcsTools\Mailing\MailingValidations;
+use LCSNG\Tools\Debugging\Logs;
+use LCSNG\Tools\Mailing\MailingValidations;
 
 use MailingConfigs;
 

@@ -1,7 +1,7 @@
 <?php
-namespace lcsTools\Requests;
+namespace LCSNG\Tools\Requests;
 
-use lcsTools\Requests\Traits\LCS_UserDevice;
+use LCSNG\Tools\Requests\Traits\LCS_UserDevice;
 
 /**
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 

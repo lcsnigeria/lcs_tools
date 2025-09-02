@@ -1,7 +1,7 @@
 <?php
-namespace lcsTools\Mailing;
+namespace LCSNG\Tools\Mailing;
 
-use lcsTools\Debugging\Logs;
+use LCSNG\Tools\Debugging\Logs;
 
 /**
  * Class MailingValidations

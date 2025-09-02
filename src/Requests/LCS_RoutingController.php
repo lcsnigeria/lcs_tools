@@ -1,7 +1,7 @@
 <?php
-namespace lcsTools\Requests;
+namespace LCSNG\Tools\Requests;
 
-use lcsTools\Requests\LCS_Request;
+use LCSNG\Tools\Requests\LCS_Request;
 
 /**
  * Manages routing and template rendering.

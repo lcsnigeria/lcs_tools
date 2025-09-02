@@ -1,5 +1,5 @@
 <?php
-namespace lcsTools\DataValidation;
+namespace LCSNG\Tools\DataValidation;
 
 /**
  * Class LCS_OutputEscape

@@ -1,5 +1,5 @@
 <?php
-use lcsTools\Debugging\Logs;
+use LCSNG\Tools\Debugging\Logs;
 
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\Transport;

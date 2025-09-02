@@ -1,8 +1,8 @@
 <?php
-namespace lcsTools\Mailing;
+namespace LCSNG\Tools\Mailing;
 
-use lcsTools\Debugging\Logs;
-use lcsTools\Tools\LCS_DirOps;
+use LCSNG\Tools\Debugging\Logs;
+use LCSNG\Tools\Utils\LCS_DirOps;
 
 $mailingDependencies = [
     'MailingConfigs.php',

@@ -1,5 +1,5 @@
 <?php
-namespace lcsTools\Hooks;
+namespace LCSNG\Tools\Hooks;
 
 /**
  * Plugin API: LCS_Hook class

@@ -1,5 +1,5 @@
 <?php
-namespace lcsTools\Requests\Traits;
+namespace LCSNG\Tools\Requests\Traits;
 
 use DeviceDetector\DeviceDetector;
 use DeviceDetector\Parser\Device\AbstractDeviceParser;
@@ -13,7 +13,7 @@ use DeviceDetector\Parser\Device\AbstractDeviceParser;
  * This trait can be used in any class that needs access to parsed device info
  * such as OS, browser, device type, brand, model, and formatted display strings.
  *
- * @package lcsTools\Requests\Traits
+ * @package LCSNG\Tools\Requests\Traits
  */
 trait LCS_UserDevice
 {
