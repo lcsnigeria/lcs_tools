@@ -1,13 +1,13 @@
 <?php
 namespace LCSNG\Tools\Requests;
 
-use LCSNG\Tools\Requests\LCS_Request;
+use LCSNG\Tools\Requests\LCS_Requests;
 
 /**
  * Manages routing and template rendering.
  */
 #[\AllowDynamicProperties]
-class LCS_RoutingController extends LCS_Request
+class LCS_RoutingController extends LCS_Requests
 {
     
     const DEFAULT_TEMPLATE_PATHS = [

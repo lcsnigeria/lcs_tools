@@ -608,6 +608,117 @@ class LCS_ArrayOps
     }
 
     /**
+     * Extend the value of an array at a given position by making the existing value
+     * the key of a new nested array containing the new data.
+     *
+     * Rules:
+     * - Only string, number, or boolean values can be extended into new keys.
+     * - Empty arrays `[]` are not extendable (throws error).
+     * - `position` (default = null): Which top-level key to operate on.
+     *      - null → default depends on $drillPosition:
+     *          - "end"   → last key
+     *          - "start" → first key (default philosophy)
+     *      - int → index of the key (0 = first, -1 = last, etc.)
+     *      - string → exact array key
+     * - `$drillPosition` (default = "start"):
+     *      - "start" → drills into the first available nested array (default).
+     *      - "end"   → drills into the last available nested array.
+     *
+     * @param array $arr - The array to extend
+     * @param mixed $data - The new data to append
+     * @param int|string|null $position - Key/index of the array to target
+     * @param string $drillPosition - Where to drill when nested ("start"|"end")
+     * @throws InvalidArgumentException If the target is not extendable
+     * @return array The modified array (mutates original)
+     *
+     * @example
+     * // Example 1: Basic usage (default → extends first key "a")
+     * $arr1 = [ "a" => "apple", "b" => [ "k1" => "banana1", "k2" => "banana2" ], "c" => "cherry" ];
+     * extendArrayValue($arr1, "X");
+     * // → [ "a" => [ "apple" => "X" ], "b" => [ "k1" => "banana1", "k2" => "banana2" ], "c" => "cherry" ]
+     *
+     * @example
+     * // Example 2: Explicit position (last key "c")
+     * $arr2 = [ "a" => "apple", "b" => "banana", "c" => "cherry" ];
+     * extendArrayValue($arr2, "Y", -1);
+     * // → [ "a" => "apple", "b" => "banana", "c" => [ "cherry" => "Y" ] ]
+     *
+     * @example
+     * // Example 3: Drill into nested array (first key of "b" → "k1")
+     * $arr3 = [ "a" => "apple", "b" => [ "k1" => "banana1", "k2" => "banana2" ], "c" => "cherry" ];
+     * extendArrayValue($arr3, "Z", "b", "start");
+     * // → [ "a" => "apple", "b" => [ "k1" => [ "banana1" => "Z" ], "k2" => "banana2" ], "c" => "cherry" ]
+     *
+     * @example
+     * // Example 4: Multi-level drilling
+     * $arr4 = [ "a" => [ "sub1" => [ "sub2" => "deep" ] ] ];
+     * extendArrayValue($arr4, "D", "a", "start");
+     * // → [ "a" => [ "sub1" => [ "sub2" => [ "deep" => "D" ] ] ] ]
+     *
+     * @example
+     * // Example 5: Error cases
+     * extendArrayValue([], "oops");
+     * // ❌ Error: extendArrayValue: Cannot operate on empty array.
+     *
+     * extendArrayValue([ "a" => [] ], "oops");
+     * // ❌ Error: extendArrayValue: Cannot append into empty array.
+     *
+     * extendArrayValue([ "a" => [10, 20, 30] ], "oops");
+     * // ❌ Error: extendArrayValue: Cannot append into non-scalar value (type: array).
+     */
+    public static function extendArrayValue(array &$arr, $data, $position = null, string $drillPosition = "start"): array {
+        if (empty($arr)) {
+            throw new InvalidArgumentException("extendArrayValue: Cannot operate on empty array.");
+        }
+
+        $keys = array_keys($arr);
+
+        // Resolve target key
+        if ($position === null) {
+            $targetKey = $drillPosition === "end" ? end($keys) : reset($keys);
+        } elseif (is_int($position)) {
+            $idx = $position < 0 ? count($keys) + $position : $position;
+            if (!isset($keys[$idx])) {
+                throw new InvalidArgumentException("extendArrayValue: Position $position is out of bounds.");
+            }
+            $targetKey = $keys[$idx];
+        } elseif (is_string($position)) {
+            if (!array_key_exists($position, $arr)) {
+                throw new InvalidArgumentException("extendArrayValue: Key \"$position\" not found.");
+            }
+            $targetKey = $position;
+        } else {
+            throw new InvalidArgumentException("extendArrayValue: Invalid position type.");
+        }
+
+        // Drill into nested arrays
+        $parent =& $arr;
+        $key = $targetKey;
+
+        while (is_array($parent[$key])) {
+            if (empty($parent[$key])) {
+                throw new InvalidArgumentException("extendArrayValue: Cannot append into empty array.");
+            }
+            $nestedKeys = array_keys($parent[$key]);
+            $key = $drillPosition === "end" ? end($nestedKeys) : reset($nestedKeys);
+            $parent =& $parent[$key];
+        }
+
+        $oldValue = $parent[$key];
+
+        // Only scalars are extendable
+        if (is_array($oldValue) || is_object($oldValue)) {
+            $type = is_array($oldValue) ? "array" : "object";
+            throw new InvalidArgumentException("extendArrayValue: Cannot append into non-scalar value (type: $type).");
+        }
+
+        // Perform the extension
+        $parent[$key] = [ $oldValue => $data ];
+
+        return $arr;
+    }
+
+    /**
      * Helper: check if an array is associative (i.e., not a 0..n-1 numeric list).
      *
      * @example

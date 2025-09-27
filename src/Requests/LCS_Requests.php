@@ -7,7 +7,7 @@ use LCSNG\Tools\Requests\Traits\LCS_UserDevice;
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 
  * and handling error reporting.
  */
-class LCS_Request
+class LCS_Requests
 {
     use LCS_UserDevice;
 
