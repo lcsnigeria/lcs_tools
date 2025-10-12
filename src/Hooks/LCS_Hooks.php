@@ -1,9 +1,9 @@
 <?php
 namespace LCSNG\Tools\Hooks;
 
-use LCSNG\Tools\Hooks\LCS_HookConfig;
+use LCSNG\Tools\Hooks\LCS_HooksConfig;
 
-final class LCS_Hook extends LCS_HookConfig {
+final class LCS_Hooks extends LCS_HooksConfig {
 
     private $filter = array();
     private $filters = array();

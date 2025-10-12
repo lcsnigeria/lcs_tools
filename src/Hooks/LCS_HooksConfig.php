@@ -18,7 +18,7 @@ namespace LCSNG\Tools\Hooks;
  * @see ArrayAccess
  */
 #[\AllowDynamicProperties]
-class LCS_HookConfig implements \Iterator, \ArrayAccess {
+class LCS_HooksConfig implements \Iterator, \ArrayAccess {
 
 	/**
 	 * Hook callbacks.

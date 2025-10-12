@@ -2,6 +2,7 @@
 namespace LCSNG\Tools\Database;
 
 use LCSNG\Tools\Database\LCS_DBManager;
+use LCSNG\Tools\Debugging\Logs;
 
 class LCS_DBTable extends LCS_DBManager 
 {
@@ -105,10 +106,14 @@ class LCS_DBTable extends LCS_DBManager
     }
 
     /**
-     * Sets the table name.
+     * Sets the table name for the current operation (creation or alteration).
      *
-     * @param string $table_name The name of the table.
-     * @throws \Exception If table name is invalid.
+     * Validates the operation state and the provided table name, applies the prefix if necessary,
+     * and checks for table existence. Throws exceptions if any validation fails.
+     *
+     * @param string $table_name The name of the table to set.
+     * @return $this Returns the current instance for method chaining.
+     * @throws \Exception If the operation state is invalid, the table name is invalid, or the table already exists.
      */
     public function set_table_name($table_name)
     {
@@ -129,6 +134,8 @@ class LCS_DBTable extends LCS_DBManager
         if ($this->is_table_exist($this->table_name)) {
             throw new \Exception("Table already exists: " . $this->table_name);
         }
+
+        return $this;
     }
 
     /**
@@ -414,7 +421,7 @@ class LCS_DBTable extends LCS_DBManager
      * }
      * ```
      */
-    function validatePrecisionAndScale($md) {
+    private function validatePrecisionAndScale($md) {
         // Step 1: Check if the format is valid: M,D (e.g., 10,2 or 100,10)
         if (!preg_match('/^(\d+),(\d+)$/', $md, $matches)) {
             throw new \Exception('Invalid format. Ensure the format is M,D (e.g., 10,2).');
@@ -451,6 +458,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string  $modifier        Additional SQL modifiers (e.g., UNSIGNED).
      * @param bool    $auto_increment  Whether to enable AUTO_INCREMENT.
      * 
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If auto-increment is not used with an integer type.
      */
     public function set_id($id_name = 'id', $dataType = 'INT', $modifier = 'UNSIGNED', $auto_increment = true)
@@ -465,6 +473,8 @@ class LCS_DBTable extends LCS_DBManager
         }
 
         $this->id = "`$id_name` $dataType $modifier PRIMARY KEY$should_auto_increment";
+
+        return $this;
     }
 
     /**
@@ -479,7 +489,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string|null $modifier          Additional SQL modifiers (e.g., UNSIGNED, ZEROFILL).
      * @param bool        $auto_increment    Whether the field should auto-increment.
      * 
-     * @return bool  Returns true on success, or throws an exception on failure.
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If any validation fails.
      */
     public function add_field(
@@ -543,10 +553,10 @@ class LCS_DBTable extends LCS_DBManager
                 // If data type is of integer, then discard $length_or_precision
                 if ($this->is_data_type_integer($dataType)) {
                     $this->id = "`$name` $dataType PRIMARY KEY";
-                    return true;
+                    return $this;
                 } else {
                     $this->id = "`$name` $dataType($length_or_precision) PRIMARY KEY";
-                    return true;
+                    return $this;
                 }
             }
         } else {
@@ -565,8 +575,12 @@ class LCS_DBTable extends LCS_DBManager
             'auto_increment' => $auto_increment
         ];
 
-        // Validate table creation SQL
-        return $this->validate_table_field_sql($field_data);
+        // Validate and add the field to the table definition
+        if (!$this->validate_table_field_sql($field_data)) {
+            Logs::reportError("Failed to add field '{$name}' to the table.", 3); // 3 means throw exception
+        }
+
+        return $this;
     }
 
     /**
@@ -581,7 +595,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string|null $modifier          Additional SQL modifiers (e.g., UNSIGNED, ZEROFILL).
      * @param bool        $auto_increment    Whether the field should auto-increment.
      * 
-     * @return bool  Returns true on success, or throws an exception on failure.
+     * @return object Returns current object if the column is successfully added.
      * @throws \Exception If any validation fails.
      */
     public function add_column(
@@ -605,7 +619,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string|null $default The default value.
      * @param bool        $unique  Whether the column should be unique.
      * 
-     * @return bool Returns true if the field is successfully added.
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If field name or length is invalid.
      */
     public function add_varchar($name, $length = 255, $default = NULL, $unique = false)
@@ -632,7 +646,11 @@ class LCS_DBTable extends LCS_DBManager
             'unique' => $unique
         ];
 
-        return $this->validate_table_field_sql($field_data);
+        if (!$this->validate_table_field_sql($field_data)) {
+            Logs::reportError("Failed to add VARCHAR field '$name' to the table.", 3); // 3 means throw exception
+        }
+        
+        return $this;
     }
 
     /**
@@ -646,7 +664,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param bool        $primary_key    Whether the column is the primary key.
      * @param bool        $auto_increment Whether the column should auto-increment (valid only if primary key).
      * 
-     * @return bool Returns true if the field is successfully added.
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If auto-increment is already set or misused.
      */
     public function add_int($name, $dataType = 'INT', $modifier = 'UNSIGNED', $default = NULL, $unique = false, $primary_key = false, $auto_increment = false)
@@ -686,7 +704,10 @@ class LCS_DBTable extends LCS_DBManager
             'auto_increment' => $auto_increment
         ];
 
-        $this->validate_table_field_sql($field_data);
+        // Validate and add the field to the table definition
+        if (!$this->validate_table_field_sql($field_data)) {
+            Logs::reportError("Failed to add INT field '$name' to the table.", 3); // 3 means throw exception
+        }
 
         return $this;
     }
@@ -698,7 +719,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string       $index_type The type of index.
      * @param string       $index_name The name of the index.
      *
-     * @return void
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If the index name, type, or columns are invalid.
      */
     public function add_index(array|string $columns, string $index_type = 'INDEX', string $index_name = '')
@@ -828,12 +849,16 @@ class LCS_DBTable extends LCS_DBManager
          else {
             throw new \Exception("Table state unknown: neither creating nor altering.");
         }
+
+        return $this;
     }
 
     /**
      * Adds a creation timestamp field.
      *
      * @param string $name The column name.
+     * 
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If the table state is unknown or column already exists.
      */
     public function set_creation_timestamp($name = 'creation_date')
@@ -842,6 +867,26 @@ class LCS_DBTable extends LCS_DBManager
 
         $this->creation_date_sql = ($this->altering_table ? "ADD COLUMN " : "") . 
             "`$name` TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
+
+        return $this;
+    }
+
+    /**
+     * Adds an update timestamp field.
+     *
+     * @param string $name The column name.
+     * 
+     * @return object Returns current object if the field is successfully added.
+     * @throws \Exception If the table state is unknown or column already exists.
+     */
+    public function set_update_timestamp($name = 'updated_at')
+    {
+        $this->validate_column_addition($name);
+
+        $this->updated_at_sql = ($this->altering_table ? "ADD COLUMN " : "") . 
+            "`$name` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP";
+
+        return $this;
     }
 
     /**
@@ -855,7 +900,7 @@ class LCS_DBTable extends LCS_DBManager
      *                                       - Relative string like '1 Day', '2 Weeks', etc.
      * 
      * @throws InvalidArgumentException     If the date format is not supported or invalid.
-     * @return void
+     * @return object Returns current object if the field is successfully added.
      */
     public function add_timestamp($name = 'creation_date', $useCurrentTimeAsDefault = true, $defaultTime = null)
     {
@@ -899,20 +944,8 @@ class LCS_DBTable extends LCS_DBManager
 
         $this->creation_date_sql = ($this->altering_table ? "ADD COLUMN " : "") .
             "`$name` TIMESTAMP DEFAULT $default";
-    }
 
-    /**
-     * Adds an update timestamp field.
-     *
-     * @param string $name The column name.
-     * @throws \Exception If the table state is unknown or column already exists.
-     */
-    public function set_update_timestamp($name = 'updated_at')
-    {
-        $this->validate_column_addition($name);
-
-        $this->updated_at_sql = ($this->altering_table ? "ADD COLUMN " : "") . 
-            "`$name` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP";
+        return $this;
     }
 
     /**
@@ -945,6 +978,7 @@ class LCS_DBTable extends LCS_DBManager
      * @param string $on_update       Action on update (CASCADE, SET NULL, etc.).
      * @param string $on_delete       Action on delete (CASCADE, SET NULL, etc.).
      * 
+     * @return object Returns current object if the field is successfully added.
      * @throws \Exception If any parameter is invalid.
      */
     public function reference_table(
@@ -998,6 +1032,8 @@ class LCS_DBTable extends LCS_DBManager
         }
 
         $this->foreign_keys_sql[] = $foreign_key_sql;
+
+        return $this;
     }
 
     /**
