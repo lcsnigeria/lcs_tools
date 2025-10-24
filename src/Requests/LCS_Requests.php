@@ -2,6 +2,7 @@
 namespace LCSNG\Tools\Requests;
 
 use LCSNG\Tools\Requests\Traits\LCS_UserDevice;
+use LCSNG\Tools\Utils\LCS_ArrayOps;
 
 /**
  * Handles request, routing, including retrieving URI segments, managing request and session variables, 
@@ -14,9 +15,6 @@ class LCS_Requests
     /** @var bool Whether to report errors as exceptions */
     public $throwErrors;
 
-    /** @var bool Whether nonce been verified already */
-    private $isNonceVerified = false;
-
     /**
      * Constructor for initializing error reporting.
      *
@@ -25,7 +23,7 @@ class LCS_Requests
     public function __construct(bool $throwErrors = false)
     {
         $this->throwErrors = $throwErrors;
-
+        !defined('AJAX_ENDPOINT') ? define('AJAX_ENDPOINT', '/run_ajax.php') : AJAX_ENDPOINT;
         $this->initInstance();
     }
 
@@ -224,187 +222,150 @@ class LCS_Requests
                 $requestData = array_merge($requestData, $postData);
             }
         }
-        
-        // Ensure the securify of this request
-        $isNonceRetrieval = isset($requestData['isNonceRetrieval']) && $requestData['isNonceRetrieval'] == true;
-        $nonce_name = $requestData['nonce_name'] ?? 'lcs_request_nonce';
-
-        if ($isNonceRetrieval) {
-            // Generate a new nonce and return it to the client
-            $nonce = $this->create_nonce($nonce_name);
-            $this->send_json_success($nonce);
-        }
-        
-        $nonce_verification_required = isset($requestData['secure']) && $requestData['secure'] == true;
-        if ($nonce_verification_required && !$this->isNonceVerified) {
-            // Validate the nonce
-            $retrieved_nonce = $requestData['nonce'] ?? '';
-            $verified = $this->verify_nonce($retrieved_nonce, $nonce_name);
-            if (!$verified) {
-                $this->isNonceVerified = false;
-                $this->send_json_error("Unauthorized action.");
-            }
-            $this->isNonceVerified = true;
-        }
 
         return $requestData;
     }
 
     /**
-     * Generate a cryptographically secure, reusable nonce for a specific action.
+     * Resolves and verifies a nonce for secure requests.
      *
-     * @param string $action  The action the nonce is tied to (e.g., 'delete_post').
-     * @param int    $ttl     Time-to-live in seconds (default: 3600 = 1 hour).
-     * @param int    $length  Length in bytes before hex encoding (default: 32).
-     * @return string         The nonce string.
+     * This method checks if nonce verification is required (via 'SECURE' in request data).
+     * If required and not already verified, it attempts to verify the provided nonce.
+     * If verification fails, it responds with a new nonce and a failure response.
+     * If verification succeeds, it responds with a new nonce and a success response.
+     *
+     * @return void
      */
-    public function create_nonce(string $action, int $ttl = 3600, int $length = 32): string {
-        $this->start_session();
+    public function resolve_nonce(): void
+    {
+        $requestData = $this->get_request_data();
+        $nonceVerificationRequired = !empty($requestData['SECURE']) && $requestData['SECURE'] == true;
+        $nonceVerified = !empty($requestData['NONCE_VERIFIED']) && $requestData['NONCE_VERIFIED'] == true;
 
-        if (!isset($_SESSION['nonces'])) {
-            $_SESSION['nonces'] = [];
-        }
-
-        // Check if an unexpired nonce for this action exists and reuse it
-        foreach ($_SESSION['nonces'] as $nonce => $data) {
-            if ($data['action'] === $action && $data['expires'] > time()) {
-                return $nonce;
+        if ($nonceVerificationRequired) {
+            if (!$nonceVerified) {
+                $nonce = $requestData['NONCE'] ?? null;
+                if (!$this->verify_nonce($nonce)) {
+                    $this->send_json_response([
+                        'success' => false,
+                        'data' => $this->generate_nonce()
+                    ]);
+                }
+                $this->send_json_success($this->generate_nonce());
             }
         }
-
-        // Generate a secure, random nonce
-        $nonce = bin2hex(random_bytes($length));
-        $expires = time() + $ttl;
-
-        $_SESSION['nonces'][$nonce] = [
-            'action'  => $action,
-            'expires' => $expires,
-        ];
-
-        return $nonce;
     }
 
     /**
-     * Verify a nonce for a specific action.
+     * Verifies the validity of a given nonce string.
      *
-     * @param string $nonce       The nonce to validate.
-     * @param string $action      The expected action tied to the nonce.
-     * @param bool   $single_use  Whether the nonce should be invalidated after verification.
-     * @return bool               True if valid, false otherwise.
+     * @param string $nonce The nonce value to verify.
+     * @return bool Returns true if the nonce is valid, false otherwise.
      */
-    public function verify_nonce(string $nonce, string $action, bool $single_use = true): bool {
+    private function verify_nonce(string $nonce): bool
+    {
         $this->start_session();
+        $sessionNonce = $_SESSION['NONCE'] ?? null;
+        $nonceTTL = $_SESSION['NONCE_TTL'] ?? 0;
 
-        if (!isset($_SESSION['nonces'][$nonce])) {
-            return false; // Nonce doesn't exist
-        }
-
-        $data = $_SESSION['nonces'][$nonce];
-
-        // Check if the action matches
-        if ($data['action'] !== $action) {
+        // Validate nonce existence and value
+        if (empty($sessionNonce) || empty($nonce) || !hash_equals($sessionNonce, $nonce)) {
             return false;
         }
 
-        // Check for expiry
-        if ($data['expires'] < time()) {
-            unset($_SESSION['nonces'][$nonce]);
+        // Check nonce expiration (5 minutes)
+        if (time() - $nonceTTL > 300) {
+            unset($_SESSION['NONCE'], $_SESSION['NONCE_TTL']);
             return false;
         }
 
-        // If single-use, invalidate it after this check
-        if ($single_use) {
-            unset($_SESSION['nonces'][$nonce]);
-        }
-
+        // One-time use: rotate nonce
+        unset($_SESSION['NONCE'], $_SESSION['NONCE_TTL']);
         return true;
     }
 
     /**
-     * Performs a fair reset of nonces for a given action, ensuring controlled resets.
+     * Generates a cryptographically secure nonce and stores it in the session.
      *
-     * - If the action has no recorded reset data, it initializes the tracking.
-     * - Allows up to 3 resets before imposing a restriction.
-     * - If the last reset was 24 hours ago, it resets the trials and timestamp.
+     * The nonce is a random 256-bit (64 hex chars) value, suitable for CSRF or request validation.
+     * It also sets a timestamp for TTL (time-to-live) checks.
      *
-     * @param string $action The nonce action identifier.
+     * @return string The generated nonce.
      */
-    public function fair_reset_nonce($action) {
+    public function generate_nonce(): string
+    {
         $this->start_session();
-
-        if (!isset($_SESSION['NONCES_RESET_DATA'][$action])) {
-            $_SESSION['NONCES_RESET_DATA'][$action] = [
-                'timestamp' => time(),
-                'trials' => 1
-            ];
-            unset($_SESSION['nonces'][$action]); // Fair reset nonce
-            $this->create_nonce($action); // Generate a new nonce
-            return;
-        }
-
-        $timestamp = $_SESSION['NONCES_RESET_DATA'][$action]['timestamp'] ?? 0;
-        $trials = (int)($_SESSION['NONCES_RESET_DATA'][$action]['trials'] ?? 0);
-        $trials++;
-
-        if ($trials <= 3) {
-            unset($_SESSION['nonces'][$action]); // Fair reset nonce
-            $this->create_nonce($action); // Generate a new nonce
-            $_SESSION['NONCES_RESET_DATA'][$action]['trials'] = $trials;
-            return;
-        }
-
-        // Reset trials and timestamp if the last reset was 24 hours ago
-        if (time() - $timestamp >= 86400) { // 86400 seconds = 24 hours
-            $_SESSION['NONCES_RESET_DATA'][$action] = [
-                'timestamp' => time(),
-                'trials' => 1
-            ];
-            unset($_SESSION['nonces'][$action]); // Fair reset nonce
-        }
+        $nonce = bin2hex(random_bytes(32)); // 256 bits = 64 hex chars
+        $_SESSION['NONCE'] = $nonce;
+        $_SESSION['NONCE_TTL'] = time();
+        return $nonce;
     }
 
     /**
-     * Checks if the current request is a valid AJAX request.
+     * Outputs a meta tag containing AJAX endpoint and nonce for client-side use.
      *
-     * Validates the following:
-     * - The request must include the `X-Requested-With: XMLHttpRequest` header (if present).
-     * - Accepts specific Content-Type headers: `multipart/form-data`, `application/json`, and `application/x-www-form-urlencoded`.
-     * - Ensures the request method is either POST or GET.
+     * This method generates a secure nonce and constructs a JSON object with the AJAX endpoint
+     * and nonce. The JSON is safely embedded in a meta tag for use in front-end scripts.
      *
-     * @return bool Returns true if the request is a valid AJAX request; otherwise, false.
+     * @return void
      */
-    public function is_ajax_request(): bool {
-        // Check if the request method is allowed
-        if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN', ['POST', 'GET'], true)) {
+    public function build_ajax_nonce_meta(): void
+    {
+        $nonce = $this->generate_nonce();
+        $ajaxData = [
+            'ajaxurl' => AJAX_ENDPOINT,
+            'nonce'   => $nonce,
+        ];
+        $jsonData = json_encode($ajaxData);
+        echo '<meta name="lcs_ajax_object" content="' . htmlspecialchars($jsonData, ENT_QUOTES, 'UTF-8') . '">';
+        return;
+    }
+
+    /**
+     * Determines if the current request was made via AJAX.
+     *
+     * Covers:
+     * - XMLHttpRequest (`X-Requested-With`)
+     * - fetch() API calls with JSON or FormData
+     * - GET or POST requests where headers clearly indicate AJAX intent
+     *
+     * @return bool True if it's an AJAX request; otherwise false.
+     */
+    public function is_ajax_request(): bool
+    {
+        $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN');
+        if (!in_array($method, ['GET', 'POST'], true)) {
             return false;
         }
 
-        // Check for the `X-Requested-With` header (optional for FormData)
+        // Explicit AJAX indicator (most reliable)
         if (
             isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
-            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) !== 'xmlhttprequest'
+            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
         ) {
-            return false;
-        }
-
-        // Validate the Content-Type header
-        if (isset($_SERVER['CONTENT_TYPE'])) {
-            $contentType = strtolower($_SERVER['CONTENT_TYPE']);
-            if (
-                stripos($contentType, 'multipart/form-data') !== false || // File uploads via FormData
-                stripos($contentType, 'application/json') !== false ||   // JSON payloads
-                stripos($contentType, 'application/x-www-form-urlencoded') !== false // Form POSTs
-            ) {
-                return true;
-            }
-        }
-
-        // Allow fallback for POST requests without a strict Content-Type check
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return true;
         }
 
-        return false; // Not a valid AJAX request
+        // AJAX-oriented content types
+        $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+        if (
+            str_contains($contentType, 'application/json') ||
+            str_contains($contentType, 'application/x-www-form-urlencoded') ||
+            str_contains($contentType, 'multipart/form-data')
+        ) {
+            return true;
+        }
+
+        // Accept header — only count it if JSON is *preferred*, not HTML
+        $accept = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
+        if (
+            str_contains($accept, 'application/json') &&
+            !str_contains($accept, 'text/html')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -456,27 +417,6 @@ class LCS_Requests
             http_response_code(400); // Bad Request
             echo json_encode(['error' => 'Bad or unauthorized request from ' . htmlspecialchars($clientIp)]);
             exit;
-        }
-    }
-
-    /**
-     * Validate an AJAX request by checking its nonce for security.
-     *
-     * @param string $nonce_field The field name where the nonce is sent (default: 'nonce').
-     * @param string $action The action name for the nonce validation (default: 'lcs_ajax_nonce').
-     */
-    public function verify_ajax_referer($nonce_field = 'nonce', $action = 'lcs_ajax_nonce') {
-        // Retrieve request data
-        $request_data = $this->get_request_data();
-
-        // Check if request data is retrieved successfully
-        if (!$request_data) {
-            $this->send_json_error('Failed to retrieve request data.');
-        }
-
-        // Validate the nonce field and its value
-        if (!isset($request_data[$nonce_field]) || !$this->verify_nonce($request_data[$nonce_field], $action)) {
-            $this->send_json_error('Unauthorized action.');
         }
     }
 
@@ -600,25 +540,41 @@ class LCS_Requests
     /**
      * Retrieves and parses the client's User-Agent string.
      *
-     * This method uses basic pattern matching and the LCS_UserDevice utility to extract
-     * browser, platform, and device type details. It also enhances output by returning
-     * advanced device information (brand, model, OS, browser) via DeviceDetector.
+     * Uses basic pattern matching and the LCS_UserDevice utility to extract
+     * browser, platform, and device details. Caches results for identical UA strings
+     * within a single request cycle for performance.
      *
-     * @return array An associative array containing:
-     *               - user_agent: Raw User-Agent string.
-     *               - browser_name: Detected browser name.
-     *               - platform_name: Detected operating system.
-     *               - device_type: Basic device classification (Desktop, Mobile, Tablet).
-     *               - device_info: Full parsed details (brand, model, OS, browser, etc.).
-     *               - device_summary: Concise readable string for UI or logs.
+     * @return array {
+     *   @type string $user_agent     Raw User-Agent string.
+     *   @type string $browser_name   Detected browser name.
+     *   @type string $platform_name  Detected operating system.
+     *   @type string $device_type    Basic classification (Desktop, Mobile, Tablet).
+     *   @type array  $device_info    Full parsed details (brand, model, OS, browser).
+     *   @type string $device_summary Concise readable string for UI or logs.
+     * }
+     *
+     * @example
+     * ```php
+     * $ua = $this->get_user_agent();
+     * echo $ua['device_summary'];
+     * ```
      */
     public function get_user_agent(): array
     {
         // Raw user agent string
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN';
 
-        // Basic browser detection
-        $browser = 'Unknown Browser';
+        /** 
+         * Static cache ensures repeated calls within one request
+         * for the same UA string don’t re-parse the data.
+         */
+        static $cache = [];
+        if (isset($cache[$userAgent])) {
+            return $cache[$userAgent];
+        }
+
+        // --- Basic browser detection ---
+        $browser = 'Unknown';
         if ($this->contains('MSIE', $userAgent) || $this->contains('Trident/', $userAgent)) {
             $browser = 'Internet Explorer';
         } elseif ($this->contains('Edge', $userAgent)) {
@@ -633,8 +589,8 @@ class LCS_Requests
             $browser = 'Opera';
         }
 
-        // Basic platform detection
-        $platform = 'Unknown Platform';
+        // --- Basic platform detection ---
+        $platform = 'Unknown';
         if ($this->contains('Windows', $userAgent)) {
             $platform = 'Windows';
         } elseif ($this->contains('Macintosh', $userAgent) || $this->contains('Mac OS X', $userAgent)) {
@@ -647,7 +603,7 @@ class LCS_Requests
             $platform = 'iOS';
         }
 
-        // Basic device type detection
+        // --- Basic device type detection ---
         $deviceType = 'Desktop';
         if ($this->contains('Mobi', $userAgent)) {
             $deviceType = 'Mobile';
@@ -655,11 +611,12 @@ class LCS_Requests
             $deviceType = 'Tablet';
         }
 
-        // Advanced detection using DeviceDetector
-        $deviceInfo = $this->getDeviceInfo();
+        // --- Advanced detection ---
+        $deviceInfo    = $this->getDeviceInfo();
         $deviceSummary = $this->getFormattedDeviceInfo();
 
-        return [
+        // --- Final structured result ---
+        $result = [
             'user_agent'     => $userAgent,
             'browser_name'   => $browser,
             'platform_name'  => $platform,
@@ -667,6 +624,11 @@ class LCS_Requests
             'device_info'    => $deviceInfo,
             'device_summary' => $deviceSummary
         ];
+
+        // Store in static cache for reuse during this request
+        $cache[$userAgent] = $result;
+
+        return $result;
     }
 
     /**
@@ -810,22 +772,85 @@ class LCS_Requests
     }
 
     /**
-     * Retrieves the current URL of the request.
+     * Retrieve the "current" URL for the incoming request.
      *
-     * This function constructs the full URL based on server variables,
-     * including protocol, host, and request URI. It can optionally exclude
-     * the protocol and account for AJAX behavior.
+     * This method builds a best-effort, normalized URL string using server
+     * environment variables (typically $_SERVER). It composes scheme, host,
+     * port and path (including an optional query string) and contains logic to
+     * reduce common AJAX-related misreporting by optionally preferring the
+     * HTTP referer as the originating page.
      *
-     * When handling AJAX requests, the request URI typically points to the
-     * AJAX endpoint itself rather than the original page. If $isolateAjaxEffects
-     * is true, this function will prioritize the HTTP referer to reflect the
-     * actual page that initiated the AJAX call.
+     * Behavior summary:
+     * - Scheme determination: automatically detects "https" when the request
+     *   indicates TLS (e.g. HTTPS == 'on', SERVER_PORT == 443) or when common
+     *   proxy headers (e.g. HTTP_X_FORWARDED_PROTO) indicate an upstream scheme.
+     * - Host determination: uses HTTP_HOST when available, falls back to
+     *   SERVER_NAME/ SERVER_ADDR. When behind proxies, common forwarded host
+     *   headers may be considered (but see security note below).
+     * - Request path: derived from REQUEST_URI when available; when the request
+     *   is an AJAX/XHR call and $isolateAjaxEffects is true, the function will
+     *   prefer HTTP_REFERER (if present) so the returned URL reflects the page
+     *   that initiated the AJAX call rather than the AJAX endpoint itself.
+     * - Query string handling: controlled by $stripQueryArgs. You may strip the
+     *   entire query string, keep it, or remove specific query parameters.
      *
-     * @param bool $includeProtocol Whether to include the protocol (http/https) in the returned URL.
-     * @param bool $isolateAjaxEffects Whether to prioritize HTTP referer during AJAX requests to reflect the real source page. Default is true.
-     * @return string The current URL.
+     * Important security/resilience notes:
+     * - Referer and proxy headers can be spoofed. Do not treat the returned URL
+     *   as a trusted source of truth for authentication or authorization decisions.
+     * - This function aims to be robust across typical web server and proxy
+     *   setups but may still produce incomplete results if the server environment
+     *   is missing expected variables. It always returns a string (possibly an
+     *   empty string) rather than throwing.
+     *
+     * Examples of returned values (depending on $includeProtocol):
+     * - includeProtocol = true  => "https://example.com/path/to/page?foo=bar"
+     * - includeProtocol = false => "example.com/path/to/page?foo=bar"
+     * - when $stripQueryArgs = true => query string removed:
+     *     "https://example.com/path/to/page"
+     *
+     * Parameters:
+     * @param bool $includeProtocol
+     *        If true, the returned URL will include the scheme/protocol prefix
+     *        (e.g. "http://" or "https://"). If false, the scheme portion is
+     *        omitted but host, port (if nonstandard) and path are still included.
+     *
+     * @param bool $isolateAjaxEffects
+     *        When true (default) and the request appears to be an AJAX/XHR call
+     *        (for example when X-Requested-With or other indicators are present),
+     *        the function will preferentially use HTTP_REFERER (when available)
+     *        to reconstruct the URL of the page that initiated the AJAX request.
+     *        When false, the URL is constructed strictly from the current request
+     *        values (REQUEST_URI, HTTP_HOST, etc.), which may point to an AJAX
+     *        endpoint rather than the originating page.
+     *
+     * @param bool|array|string $stripQueryArgs
+     *        Controls how the query string is handled:
+     *        - false (default): keep the full query string intact.
+     *        - true: remove the entire query string from the returned URL.
+     *        - array: a list of query parameter names to remove (e.g. ['utm_source',
+     *          'session_id']). Only those keys are stripped; all others remain.
+     *        - string: comma-separated list of query keys to remove (e.g. "a,b,c").
+     *        Note: parameter name matching is exact (case-sensitive).
+     *
+     * Return value:
+     * @return string
+     *         A reconstructed URL string. The returned value is normalized but
+     *         not validated or sanitized beyond basic composition. If insufficient
+     *         server information is available, an empty string or a partial URL
+     *         may be returned.
+     *
+     * See also:
+     * - $_SERVER keys: REQUEST_URI, HTTP_HOST, SERVER_NAME, SERVER_PORT, HTTPS,
+     *   HTTP_REFERER, X-Requested-With, HTTP_X_FORWARDED_PROTO
+     *
+     * Usage recommendations:
+     * - Use $isolateAjaxEffects = true when you want the visible page URL that
+     *   triggered an AJAX request (good for analytics, redirects, or canonical
+     *   link generation).
+     * - Use $stripQueryArgs when you need a canonical URL without session or
+     *   tracking parameters.
      */
-    public function get_url(bool $includeProtocol = false, bool $isolateAjaxEffects = true): string
+    public function get_url(bool $includeProtocol = false, bool $isolateAjaxEffects = true, $stripQueryArgs = false): string
     {
         $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
@@ -839,6 +864,63 @@ class LCS_Requests
 
         if (!$includeProtocol) {
             $url = preg_replace('#^https?://#i', '', $url); // case-insensitive just in case
+        }
+
+        // Handle $stripQueryArgs behavior:
+        // - false: keep full query string
+        // - true: remove entire query string
+        // - array: remove only listed query keys
+        // - string: comma-separated list of keys to remove
+        if ($stripQueryArgs !== false) {
+            // Preserve fragment if present
+            $fragment = '';
+            if (strpos($url, '#') !== false) {
+            [$url, $fragment] = explode('#', $url, 2);
+            }
+
+            // Separate path and query
+            $beforeQuery = $url;
+            $queryString = '';
+            if (strpos($url, '?') !== false) {
+            [$beforeQuery, $queryString] = explode('?', $url, 2);
+            }
+
+            if ($stripQueryArgs === true) {
+            // Remove entire query string
+            $url = $beforeQuery;
+            } else {
+            // Normalize keys to remove into an array
+            if (is_string($stripQueryArgs)) {
+                $keysToRemove = array_filter(array_map('trim', explode(',', $stripQueryArgs)), fn($k) => $k !== '');
+            } elseif (is_array($stripQueryArgs)) {
+                $keysToRemove = $stripQueryArgs;
+            } else {
+                // Unsupported type — treat as keep full query
+                $keysToRemove = [];
+            }
+
+            if (!empty($queryString) && !empty($keysToRemove)) {
+                // Parse query into array
+                parse_str($queryString, $qs);
+                // Remove listed keys (exact match)
+                foreach ($keysToRemove as $k) {
+                if (array_key_exists($k, $qs)) {
+                    unset($qs[$k]);
+                }
+                }
+                // Rebuild query
+                $newQuery = http_build_query($qs);
+                $url = $beforeQuery . ($newQuery !== '' ? ('?' . $newQuery) : '');
+            } else {
+                // Nothing to remove or no query present; keep as-is (or original beforeQuery if no keys requested)
+                $url = $beforeQuery . ($queryString !== '' && empty($keysToRemove) ? ('?' . $queryString) : '');
+            }
+            }
+
+            // Reattach fragment if it existed
+            if ($fragment !== '') {
+            $url .= '#' . $fragment;
+            }
         }
 
         return trim($url);
@@ -885,6 +967,27 @@ class LCS_Requests
 
         // Fallback to the current URL if the referer is not set or is empty
         return $this->get_url($includeProtocol, $isolateAjaxEffects);
+    }
+
+    /**
+     * Retrieves and decodes query data from the HTTP referer URL.
+     *
+     * This method checks if the HTTP referer is set and not empty in the server variables.
+     * If present, it extracts the query arguments from the referer URL and decodes them
+     * using the LCS_ArrayOps::decodeURLQuery method. The decoded data is returned as an array
+     * or an object, depending on the $returnObject parameter.
+     *
+     * @param bool $returnObject Optional. If true, returns the decoded query data as an object. Defaults to false (array).
+     * @return array|object Decoded query data from the referer URL, or an empty array if no referer or query data is found.
+     */
+    public function get_referer_query_data( $returnObject = false ) 
+    {
+        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+            $qUrl = $this->get_url_query_arg( $_SERVER['HTTP_REFERER'] );
+            return $qUrl ? LCS_ArrayOps::decodeURLQuery( $qUrl, $returnObject) : [];
+        }
+
+        return [];
     }
 
     /**

@@ -1,16 +1,77 @@
 <?php
 namespace LCSNG\Tools\Database;
 
+use LCSNG\Tools\Debugging\Logs;
+
 /**
  * Class LCS_DBManager
  *
- * A robust and flexible database management class supporting both PDO and MySQLi. 
- * This class simplifies common database operations like querying, fetching, 
- * and managing results while providing compatibility and error handling.
+ * A robust, flexible, and unified database management class for PHP applications.
+ * Supports both PDO and MySQLi drivers, providing a consistent API for querying,
+ * fetching, and manipulating database records. Designed for reliability, error handling,
+ * and compatibility with multiple SQL dialects.
  *
- * @package LCSNG
+ * ## Features
+ * - **Dual SQL Manager Support:** Seamlessly switch between PDO and MySQLi.
+ * - **Connection Management:** Handles DSN parsing, connection setup, and error reporting.
+ * - **Query Execution:** Supports direct queries and prepared statements with automatic placeholder validation.
+ * - **CRUD Operations:** Simplifies insert, update, delete, and replace operations.
+ * - **Result Fetching:** Flexible fetch modes (OBJECT/ARRAY), single value, row, or column retrieval.
+ * - **Transaction Control:** Start, commit, and rollback transactions with state tracking.
+ * - **Schema Inspection:** Check for table/column existence, retrieve primary keys, constraints, and table structure.
+ * - **Sanitization:** Built-in data sanitization for safe SQL operations.
+ * - **Error Handling:** Configurable error reporting (throw or log).
+ * - **Charset/Collation:** Automatic or manual charset/collation management.
+ * - **Extensible:** Easily adaptable for other SQL dialects and advanced features.
+ *
+ * ## Usage Example
+ * ```php
+ * $creds = "mysql:host=localhost;dbname=testdb;charset=utf8mb4;username=demo;password=secret";
+ * $db = new LCS_DBManager($creds, ['FETCH_MODE' => 'OBJECT'], 'PDO');
+ * if ($db->is_connected()) {
+ *     $results = $db->get_results("SELECT * FROM users WHERE status = ?", 'active');
+ *     foreach ($results as $user) {
+ *         echo $user->name;
+ *     }
+ * }
+ * ```
+ *
+ * ## Constructor Parameters
+ * @param string $credentials DSN string (e.g., "mysql:host=localhost;dbname=testdb;charset=utf8mb4;username=demo;password=secret").
+ * @param array $options Connection options (PDO attributes, fetch mode, etc.).
+ * @param string $sql_manager SQL manager: 'PDO' or 'MySQLi'.
+ * @param bool $throwError Whether to throw exceptions or just log errors.
+ *
+ * ## Key Methods
+ * - `get_results($sql, ...$values)`: Fetches multiple rows.
+ * - `get_row($sql, ...$values)`: Fetches a single row.
+ * - `get_var($sql, ...$values)`: Fetches a single value.
+ * - `insert($table, $data)`: Inserts a row.
+ * - `update($table, $data, $where)`: Updates rows.
+ * - `delete($table, $where)`: Deletes rows.
+ * - `replace($table, $data)`: Inserts or updates a row.
+ * - `get_id($table, $where)`: Gets primary key(s).
+ * - `is_table_exist($table_name)`: Checks if a table exists.
+ * - `is_table_column_exist($table, $column)`: Checks if a column exists.
+ * - `get_table_data($table)`: Gets table structure and data.
+ * - `get_table_constraints($table)`: Gets table constraints.
+ * - `is_constraint_name_exist($table, $constraint)`: Checks for constraint existence.
+ * - `startTransaction()`, `commit()`, `rollBack()`: Transaction control.
+ * - `sanitize_data($data)`: Sanitizes input for SQL.
+ * - `connection_error()`: Returns last connection error.
+ *
+ * ## Error Handling
+ * Errors are reported via the `Logs` class. Set `$throwError` to control whether exceptions are thrown or only logged.
+ *
+ * ## Extensibility
+ * Designed for easy extension to other SQL dialects and advanced schema operations.
+ *
+ * @package LCSNG\Tools\Database
  */
-class LCS_DBManager {
+class LCS_DBManager 
+{
+    /** @var bool $throwError Whether to throw exceptions on errors or just log them. */
+    public $throwError = true;
 
     /** @var string|null $credentials Database credentials string in DSN format. */
     public $credentials;
@@ -80,6 +141,7 @@ class LCS_DBManager {
     /** @var bool $inTransaction Flag to track active transactions. */
     private $inTransaction = false;
 
+    /** @var array $supported_placeholders Supported SQL placeholders for prepared statements. */
     const SQL_MANAGERS = ['PDO', 'MySQLi'];
 
     /**
@@ -101,14 +163,19 @@ class LCS_DBManager {
      * @param string $sql_manager The SQL manager to use. Acceptable values are:
      *                            - `PDO` (default): PHP Data Objects.
      *                            - `MySQLi`: MySQL Improved.
+     * 
+     * @param bool $throwError Whether to throw exceptions on errors (default: true). If false, errors are logged but not thrown.
      *
      * @throws Exception If credentials are invalid, the SQL manager is unsupported, or an invalid fetch mode is provided.
      */
-    public function __construct( string $credentials, array $options = [], string $sql_manager = "PDO") {
+    public function __construct( string $credentials, array $options = [], string $sql_manager = "PDO", $throwError = true) 
+    {
+        // Set error handling preference
+        $this->throwError = $throwError;
 
         // Validate credentials
         if (empty($credentials) || !is_string($credentials)) {
-            throw new \Exception("Config error: Database credentials are required and must be a valid string.", 1);
+            $this->reportError("Config error: Database credentials are required and must be a valid string.", 1);
         }
 
         // Set credentials variable
@@ -116,7 +183,7 @@ class LCS_DBManager {
 
         // Validates manager
         if (!in_array($sql_manager, self::SQL_MANAGERS)) {
-            throw new \Exception("Invalid SQL Manager '$sql_manager'. Use 'PDO' or 'MySQLi'.", 2);
+            $this->reportError("Invalid SQL Manager '$sql_manager'. Use 'PDO' or 'MySQLi'.", 2);
         }
 
         // Set manager variable
@@ -165,7 +232,7 @@ class LCS_DBManager {
 
             // Check if the provided FETCH_MODE is valid
             if (!array_key_exists($options['FETCH_MODE'], $fetchModes)) {
-                throw new \Exception(
+                $this->reportError(
                     "Invalid FETCH_MODE '{$options['FETCH_MODE']}'. Valid options are 'OBJECT' or 'ARRAY'."
                 );
             }
@@ -199,12 +266,10 @@ class LCS_DBManager {
                 $mysqli = new \mysqli($this->host, $this->username, $this->password, $this->dbname, $this->port, $this->socket);
                 if ($mysqli->connect_error) {
                     $this->connection_error = $mysqli->connect_error;
-                    $this->set_last_error("MySQLi Connection error: {$mysqli->connect_error}");
-                    throw new \Exception($this->last_error, 3);
+                    $this->reportError("MySQLi Connection error: {$mysqli->connect_error}", 3);
                 }
                 if (!$mysqli->set_charset($this->charset)) {
-                    $this->set_last_error("MySQLi Charset config error: {$mysqli->error}");
-                    throw new \Exception($this->last_error, 4);
+                    $this->reportError("MySQLi Charset config error: {$mysqli->error}", 4);
                 }
                 $this->connection = $mysqli;
                 break;
@@ -215,8 +280,7 @@ class LCS_DBManager {
                     $this->connection = $pdo;
                 } catch (\PDOException $e) {
                     $this->connection_error = $e->getMessage();
-                    $this->set_last_error("PDO Connection error: " . $e->getMessage());
-                    throw new \Exception($this->last_error, 3);
+                    $this->reportError("PDO Connection error: " . $e->getMessage(), 3);
                 }
                 break;
         }
@@ -255,7 +319,7 @@ class LCS_DBManager {
      */
     public function switch_sql_manager($sql_manager) {
         if (!in_array($sql_manager, self::SQL_MANAGERS)) {
-            throw new \Exception("Invalid SQL Manager '$sql_manager'. Use either " . implode(', ', self::SQL_MANAGERS), 2);
+            $this->reportError("Invalid SQL Manager '$sql_manager'. Use either " . implode(', ', self::SQL_MANAGERS), 2);
         }
         $this->previous_sql_manager = $this->sql_manager;
         $this->sql_manager = $sql_manager;
@@ -292,7 +356,7 @@ class LCS_DBManager {
     private function build_credentials() {
         // Validate the credentials input
         if (empty($this->credentials)) {
-            throw new \Exception(
+            $this->reportError(
                 'Config error: Necessary credentials are required. Example: ' .
                 '$creds = "mysql:host=localhost;dbname=testdb;charset=utf8mb4;username=demo;password=@user123";' .
                 '$db = new LCS_DBManager($creds);',
@@ -307,7 +371,7 @@ class LCS_DBManager {
         foreach ($credsArray as $cred) {
             // Ensure each pair has a valid key=value structure
             if (strpos($cred, '=') === false) {
-                throw new \Exception("Config error: Invalid credential format in '{$cred}'. Expected key=value pairs.", 2);
+                $this->reportError("Config error: Invalid credential format in '{$cred}'. Expected key=value pairs.", 2);
             }
             [$key, $value] = explode('=', $cred, 2); // Limit to 2 parts to handle values containing `=`
             $extendedCredsArray[$key] = $value;
@@ -343,6 +407,9 @@ class LCS_DBManager {
                     break;
                 case 'charset':
                     $this->charset = $credValue;
+                    break;
+                case 'collation':
+                    $this->collate = $credValue;
                     break;
                 default:
                     // Unrecognized keys are left for DSN construction
@@ -403,7 +470,7 @@ class LCS_DBManager {
 
         } catch (\Exception $e) {
             // Log error and return default charset and collation
-            $this->set_last_error("Error fetching charset and collation: " . $e->getMessage());
+            $this->reportError("Error fetching charset and collation: " . $e->getMessage());
             return "CHARACTER SET $default_charset COLLATE $default_collation";
         }
     }
@@ -432,7 +499,7 @@ class LCS_DBManager {
             return $this->fetch_all($sql, true, $dataValues, $specifiers);
 
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
+            $this->reportError($e->getMessage());
             return []; // Allows calling code to handle errors
         }
     }
@@ -448,10 +515,10 @@ class LCS_DBManager {
     public function insert($table, $data) {
         // Validate inputs
         if (empty($table) || !is_string($table)) {
-            throw new \Exception("Invalid table name provided for insert.");
+            $this->reportError("Invalid table name provided for insert.");
         }
         if (empty($data) || !is_array($data)) {
-            throw new \Exception("Insert data must be a non-empty associative array.");
+            $this->reportError("Insert data must be a non-empty associative array.");
         }
 
         // Prepare SQL
@@ -478,13 +545,13 @@ class LCS_DBManager {
     public function update($table, $data, $where) {
         // Validate inputs
         if (empty($table) || !is_string($table)) {
-            throw new \Exception("Invalid table name provided for update.");
+            $this->reportError("Invalid table name provided for update.");
         }
         if (empty($data) || !is_array($data)) {
-            throw new \Exception("Update data must be a non-empty associative array.");
+            $this->reportError("Update data must be a non-empty associative array.");
         }
         if (empty($where) || !is_array($where)) {
-            throw new \Exception("Update conditions must be a non-empty associative array.");
+            $this->reportError("Update conditions must be a non-empty associative array.");
         }
 
         // Prepare SQL
@@ -507,10 +574,10 @@ class LCS_DBManager {
     public function delete($table, $where) {
         // Validate inputs
         if (empty($table) || !is_string($table)) {
-            throw new \Exception("Invalid table name provided for delete.");
+            $this->reportError("Invalid table name provided for delete.");
         }
         if (empty($where) || !is_array($where)) {
-            throw new \Exception("Delete conditions must be a non-empty associative array.");
+            $this->reportError("Delete conditions must be a non-empty associative array.");
         }
 
         // Prepare SQL
@@ -535,10 +602,10 @@ class LCS_DBManager {
     public function replace($table, $data) {
         // Validate inputs
         if (empty($table) || !is_string($table)) {
-            throw new \Exception("Invalid table name provided for replace.");
+            $this->reportError("Invalid table name provided for replace.");
         }
         if (empty($data) || !is_array($data)) {
-            throw new \Exception("Replace data must be a non-empty associative array.");
+            $this->reportError("Replace data must be a non-empty associative array.");
         }
 
         // Prepare SQL
@@ -569,14 +636,14 @@ class LCS_DBManager {
     
             // If table is provided, WHERE must also be provided
             if (!is_null($table) && empty($where)) {
-                throw new \Exception("`get_id()` requires a WHERE condition when a table name is specified.");
+                $this->reportError("`get_id()` requires a WHERE condition when a table name is specified.");
             }
     
             // Validate table and retrieve primary key
             if (!is_null($table)) {
                 $primaryKey = $this->get_primary_key($table);
                 if (!$primaryKey) {
-                    throw new \Exception("Unable to determine primary key for table `$table`.");
+                    $this->reportError("Unable to determine primary key for table `$table`.");
                 }
     
                 // Build the WHERE clause dynamically
@@ -595,7 +662,7 @@ class LCS_DBManager {
             }
     
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
+            $this->reportError($e->getMessage());
             return null;
         }
     }
@@ -630,7 +697,7 @@ class LCS_DBManager {
             return $column;
 
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
+            $this->reportError($e->getMessage());
             return null;
         }
     }
@@ -654,7 +721,7 @@ class LCS_DBManager {
             return $results[0];
     
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
+            $this->reportError($e->getMessage());
             return null;
         }
     }    
@@ -682,7 +749,7 @@ class LCS_DBManager {
             return reset($rowArray);
 
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
+            $this->reportError($e->getMessage());
             return null;
         }
     }
@@ -715,7 +782,7 @@ class LCS_DBManager {
 
         } catch (\Exception $e) {
             // Log the error and return null
-            $this->set_last_error("Query Error: " . $e->getMessage() . " | SQL: $sql");
+            $this->reportError("Query Error: " . $e->getMessage() . " | SQL: $sql");
             return null;
         }
     }
@@ -793,7 +860,7 @@ class LCS_DBManager {
             return $primaryKey;
     
         } catch (\Exception $e) {
-            $this->set_last_error("Error fetching primary key: " . $e->getMessage());
+            $this->reportError("Error fetching primary key: " . $e->getMessage());
             return null;
         }
     }    
@@ -851,14 +918,14 @@ class LCS_DBManager {
             $stmt = $this->connection->query($sql);
             if ($this->is_pdo_manager()) {
                 if (!$stmt) {
-                    $this->set_last_error($this->connection->errorInfo()[2]);
+                    $this->reportError($this->connection->errorInfo()[2]);
                     return [];
                 }
                 return $stmt->fetchAll();
             } else {
                 $stmt = $this->connection->query($sql);
                 if (!$stmt) {
-                    $this->set_last_error($this->connection->error);
+                    $this->reportError($this->connection->error);
                     return [];
                 }
                 $rows = [];
@@ -878,9 +945,15 @@ class LCS_DBManager {
      * @param string|null $specifiers Type specifiers for MySQLi bind_param.
      * @return PDOStatement|mysqli_stmt|null Prepared statement instance, or null on failure.
      */
-    private function prepare($sql, $values, $specifiers = null) {
-
+    private function prepare($sql, $values, $specifiers = null) 
+    {
         try {
+            // Check connection
+            if (!$this->is_connected()) {
+                $this->reportError("No active database connection.");
+                return null;
+            }
+
             if ($this->is_pdo_manager()) {
                 $stmt = $this->connection->prepare($sql);
                 $stmt->execute($values);
@@ -888,8 +961,7 @@ class LCS_DBManager {
             } else {
                 $stmt = $this->connection->prepare($sql);
                 if ($stmt === false) {
-                    $this->set_last_error($this->connection->error);
-                    throw new \Exception($this->connection->error);
+                    $this->reportError($this->connection->error);
                 }
     
                 if ($values && $specifiers) {
@@ -897,15 +969,13 @@ class LCS_DBManager {
                 }
     
                 if (!$stmt->execute()) {
-                    $this->set_last_error($stmt->error);
-                    throw new \Exception($stmt->error);
+                    $this->reportError($stmt->error);
                 }
                 
                 return $stmt; // Ensure $stmt is returned
             }
         } catch (\Exception $e) {
-            $this->set_last_error($e->getMessage());
-            throw $e;
+            $this->reportError($e->getMessage());
         }
     }
 
@@ -929,8 +999,7 @@ class LCS_DBManager {
 
             $this->inTransaction = true; // Set the flag to true after starting the transaction
         } catch (\Exception $e) {
-            $this->set_last_error("Transaction start error: " . $e->getMessage());
-            throw $e;
+            $this->reportError("Transaction start error: " . $e->getMessage());
         }
     }
 
@@ -949,8 +1018,7 @@ class LCS_DBManager {
             $this->connection->commit();
             $this->inTransaction = false; // Reset the flag after committing
         } catch (\Exception $e) {
-            $this->set_last_error("Transaction commit error: " . $e->getMessage());
-            throw $e;
+            $this->reportError("Transaction commit error: " . $e->getMessage());
         }
     }
 
@@ -975,8 +1043,7 @@ class LCS_DBManager {
 
             $this->inTransaction = false; // Reset the flag after rolling back
         } catch (\Exception $e) {
-            $this->set_last_error("Transaction rollback error: " . $e->getMessage());
-            throw $e;
+            $this->reportError("Transaction rollback error: " . $e->getMessage());
         }
     }
 
@@ -1044,7 +1111,7 @@ class LCS_DBManager {
 
         // Ensure required keys exist in $table_data
         if (!isset($table_data['table_name'], $table_data['structure'], $table_data['rows'])) {
-            throw new \Exception("Invalid table data provided. 'table_name', 'structure', and 'rows' are required.");
+            $this->reportError("Invalid table data provided. 'table_name', 'structure', and 'rows' are required.");
         }
 
         $tableName = $table_data['table_name'];
@@ -1061,7 +1128,7 @@ class LCS_DBManager {
         // Execute table creation
         $createTableResult = $this->query($sqlCreateTable);
         if (!$createTableResult) {
-            throw new \Exception("Error creating table: " . $this->last_error);
+            $this->reportError("Error creating table: " . $this->last_error);
         }
 
         // Insert rows into the table
@@ -1074,7 +1141,7 @@ class LCS_DBManager {
         // Execute row insertion
         $insertRowsResult = $this->query($sqlInsertRows);
         if ($insertRowsResult === false) {
-            throw new \Exception("Error inserting rows: " . $this->last_error);
+            $this->reportError("Error inserting rows: " . $this->last_error);
         }
 
         return true; // Success
@@ -1099,7 +1166,7 @@ class LCS_DBManager {
         // Execute the query
         $result = $this->query($query);
         if (!$result) {
-            throw new \Exception("Failed to retrieve data for table '$table'.");
+            $this->reportError("Failed to retrieve data for table '$table'.");
         }
 
         $table_data = $result->fetch_all(MYSQLI_ASSOC);
@@ -1109,7 +1176,7 @@ class LCS_DBManager {
         $structure_result = $this->query($structure_query);
 
         if (!$structure_result) {
-            throw new \Exception("Failed to retrieve table structure for table '$table'.");
+            $this->reportError("Failed to retrieve table structure for table '$table'.");
         }
 
         $table_structure = $structure_result->fetch_all(MYSQLI_ASSOC);
@@ -1147,11 +1214,11 @@ class LCS_DBManager {
         $sql = preg_replace('/\?|:\w+|%[dsf]/', '?', $sql);
         $placeholderCount = preg_match_all('/\?/', $sql);
         if ($placeholderCount !== count($this->flatten_array($params))) {
-            $this->set_last_error(
+            $this->reportError(
                 "SQL mismatch error: Expected $placeholderCount placeholders, " .
                 "but got " . count($params) . " values.: $sql"
             );
-            throw new \Exception($this->last_error, 5);
+            $this->reportError($this->last_error, 5);
         }
         return $sql;
     }
@@ -1355,7 +1422,7 @@ class LCS_DBManager {
                         AND id = OBJECT_ID(?)";
                 break;
             default:
-                throw new \Exception("Unsupported database type: " . $dbType);
+                $this->reportError("Unsupported database type: " . $dbType);
         }
 
         // Execute for all non-SQLite databases
@@ -1396,7 +1463,7 @@ class LCS_DBManager {
         try {
             // Validate the fetch mode
             if (!in_array(strtoupper($FM), ['ARRAY', 'OBJECT'])) {
-                throw new \Exception("Invalid fetch mode '{$FM}'. Valid options are 'ARRAY' or 'OBJECT'.");
+                $this->reportError("Invalid fetch mode '{$FM}'. Valid options are 'ARRAY' or 'OBJECT'.");
             }
 
             // Update fetch mode settings based on the SQL manager
@@ -1411,19 +1478,8 @@ class LCS_DBManager {
 
             $this->FETCH_MODE = $FM;
         } catch (\Exception $e) {
-            $this->set_last_error("Error refreshing fetch mode: " . $e->getMessage());
-            throw $e;
+            $this->reportError("Error refreshing fetch mode: " . $e->getMessage());
         }
-    }
-
-    /**
-     * Sets the last error message for debugging.
-     *
-     * @param string $message The error message.
-     */
-    private function set_last_error($message) {
-        $this->last_error = $message;
-        trigger_error($message);
     }
 
     /**
@@ -1444,10 +1500,20 @@ class LCS_DBManager {
     }
 
     /**
+     * Reports an error using the Logs class.
+     *
+     * @param string $message The error message to report.
+     * @param int $code Optional error code (default is 0).
+     */
+    private function reportError( $message, $code = 0 ) {
+        $this->last_error = $message;
+        Logs::reportError( $message, $this->throwError ? 3 : 1, E_USER_NOTICE, $code );
+    }
+
+    /**
      * Closes the database connection upon object destruction.
      */
     public function __destruct() {
         $this->disconnect();
     }
 }
-?>

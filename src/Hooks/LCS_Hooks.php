@@ -15,7 +15,7 @@ final class LCS_Hooks extends LCS_HooksConfig {
      *
      * This function is used to add a filter callback function to a hook. It ensures that the $filter property
      * is initialized as an array, then checks if the hook already exists. If not,
-     * it creates a new LCS_Hook object for the hook. Finally, it adds the filter callback to the hook.
+     * it creates a new LCS_Hooks object for the hook. Finally, it adds the filter callback to the hook.
      *
      * @param string   $hook_name     The name of the hook to which the filter should be added.
      * @param callable $callback      The callback function to be executed when the hook is triggered.
@@ -29,9 +29,9 @@ final class LCS_Hooks extends LCS_HooksConfig {
             $this->filter = array();
         }
 
-        // Check if the hook already exists, otherwise create a new LCS_Hook object
-        if ( ! isset( $this->filter[ $hook_name ] ) || ! $this->filter[ $hook_name ] instanceof LCS_Hook ) {
-            $this->filter[ $hook_name ] = new LCS_Hook();
+        // Check if the hook already exists, otherwise create a new LCS_Hooks object
+        if ( ! isset( $this->filter[ $hook_name ] ) || ! $this->filter[ $hook_name ] instanceof LCS_Hooks ) {
+            $this->filter[ $hook_name ] = new LCS_Hooks();
         }
 
         // Add the filter
@@ -46,7 +46,7 @@ final class LCS_Hooks extends LCS_HooksConfig {
      * Applies filters to a hook.
      *
      * This function is used to apply filters to a hook. It first checks if the hook exists in the
-     * $this->filter array. If it does, it proceeds to apply the filters using the LCS_Hook object
+     * $this->filter array. If it does, it proceeds to apply the filters using the LCS_Hooks object
      * associated with the hook name. If the 'all' hook exists, it runs all associated callbacks before
      * running the callbacks for the specified hook. The function keeps track of the current filter being
      * executed in the $current_filter property.
@@ -92,10 +92,10 @@ final class LCS_Hooks extends LCS_HooksConfig {
             $this->current_filter[] = $hook_name;
         }
 
-        // Pass the value to LCS_Hook
+        // Pass the value to LCS_Hooks
         array_unshift( $args, $value );
 
-        // Apply filters using LCS_Hook object
+        // Apply filters using LCS_Hooks object
         $filtered = $this->filter[ $hook_name ]->_apply_filters( $value, $args );
 
         // Remove the current hook from $this->current_filter

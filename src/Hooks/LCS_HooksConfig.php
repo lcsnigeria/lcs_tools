@@ -2,7 +2,7 @@
 namespace LCSNG\Tools\Hooks;
 
 /**
- * Plugin API: LCS_Hook class
+ * Plugin API: LCS_Hooks class
  *
  * @package LCS
  * @subpackage Plugin
@@ -415,12 +415,12 @@ class LCS_HooksConfig implements \Iterator, \ArrayAccess {
 	}
 
 	/**
-	 * Normalizes filters set up before LCS has initialized to LCS_Hook objects.
+	 * Normalizes filters set up before LCS has initialized to LCS_Hooks objects.
 	 *
 	 * The `$filters` parameter should be an array keyed by hook name, with values
 	 * containing either:
 	 *
-	 *  - A `LCS_Hook` instance
+	 *  - A `LCS_Hooks` instance
 	 *  - An array of callbacks keyed by their priorities
 	 *
 	 * Examples:
@@ -441,19 +441,19 @@ class LCS_HooksConfig implements \Iterator, \ArrayAccess {
 	 * @since 1.0.0
 	 *
 	 * @param array $filters Filters to normalize. See documentation above for details.
-	 * @return LCS_Hook[] Array of normalized filters.
+	 * @return LCS_Hooks[] Array of normalized filters.
 	 */
 	public static function build_preinitialized_hooks( $filters ) {
-		/** @var LCS_Hook[] $normalized */
+		/** @var LCS_Hooks[] $normalized */
 		$normalized = array();
 
 		foreach ( $filters as $hook_name => $callback_groups ) {
-			if ( $callback_groups instanceof LCS_Hook ) {
+			if ( $callback_groups instanceof LCS_Hooks ) {
 				$normalized[ $hook_name ] = $callback_groups;
 				continue;
 			}
 
-			$hook = new LCS_Hook();
+			$hook = new LCS_Hooks();
 
 			// Loop through callback groups.
 			foreach ( $callback_groups as $priority => $callbacks ) {

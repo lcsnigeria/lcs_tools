@@ -4,6 +4,66 @@ namespace LCSNG\Tools\Database;
 use LCSNG\Tools\Database\LCS_DBManager;
 use LCSNG\Tools\Debugging\Logs;
 
+/**
+ * Class LCS_DBTable
+ *
+ * An advanced table schema builder and manager for PHP applications, extending LCS_DBManager.
+ * Provides a fluent, programmatic interface for creating and altering SQL tables, columns,
+ * indexes, constraints, and relationships. Designed for robust schema validation, error handling,
+ * and compatibility with MySQL and other SQL dialects.
+ *
+ * ## Features
+ * - **Table Creation & Alteration:** Easily create or modify tables with chainable methods.
+ * - **Column Definition:** Add columns with strict validation for names, types, length, precision, modifiers, defaults, uniqueness, primary keys, and auto-increment.
+ * - **Primary Key & Auto-Increment:** Set primary keys and auto-increment columns with safety checks.
+ * - **Index Management:** Add various index types (PRIMARY, UNIQUE, FULLTEXT, SPATIAL, etc.) with validation.
+ * - **Foreign Key Constraints:** Define foreign key relationships with automatic constraint naming and referential actions.
+ * - **Timestamp Columns:** Add creation and update timestamp columns with flexible default values.
+ * - **Schema Validation:** Ensures valid data types, prevents duplicate keys, and enforces SQL standards.
+ * - **Fluent API:** Chainable methods for expressive schema building.
+ * - **Error Handling:** Throws exceptions for invalid operations, duplicate columns, or unsupported features.
+ * - **Reset & State Management:** Automatically resets internal state after table operations.
+ *
+ * ## Usage Example
+ * ```php
+ * $table = new LCS_DBTable($creds, [], 'PDO');
+ * $table->new_table('users')
+ *       ->set_id('user_id', 'INT', 'UNSIGNED', true)
+ *       ->add_varchar('username', 50, null, true)
+ *       ->add_varchar('email', 100)
+ *       ->add_int('age', 'INT', 'UNSIGNED')
+ *       ->set_creation_timestamp()
+ *       ->set_update_timestamp()
+ *       ->add_index(['username'], 'unique', 'idx_username')
+ *       ->create_table();
+ * ```
+ *
+ * ## Key Methods
+ * - `new_table($table_name)`: Begin table creation.
+ * - `alter_table($table_name)`: Begin table alteration.
+ * - `set_table_name($table_name)`: Set and validate table name.
+ * - `set_id($id_name, $dataType, $modifier, $auto_increment)`: Define primary key column.
+ * - `add_field(...)`, `add_column(...)`: Add a column with full options.
+ * - `add_varchar($name, $length, $default, $unique)`: Add a VARCHAR column.
+ * - `add_int($name, $dataType, $modifier, ...)`: Add an integer column.
+ * - `add_index($columns, $index_type, $index_name)`: Add an index.
+ * - `reference_table($column, $ref_table, $ref_column, $on_update, $on_delete)`: Add a foreign key.
+ * - `set_creation_timestamp($name)`, `set_update_timestamp($name)`, `add_timestamp(...)`: Add timestamp columns.
+ * - `create_table()`: Execute table creation.
+ * - `update_table()`: Execute table alteration.
+ *
+ * ## Validation & Safety
+ * - Validates column names, types, lengths, and constraints.
+ * - Prevents duplicate primary keys and auto-increment columns.
+ * - Ensures only valid indexes and foreign key actions are used.
+ * - Throws exceptions for invalid schema operations.
+ *
+ * ## Extensibility
+ * - Easily extendable for additional SQL dialects or advanced schema features.
+ * - Designed for integration with LCS_DBManager and other database utilities.
+ *
+ * @package LCSNG\Tools\Database
+ */
 class LCS_DBTable extends LCS_DBManager 
 {
 
@@ -23,16 +83,19 @@ class LCS_DBTable extends LCS_DBManager
     private $charset_collate;
 
     /** @var string The primary key column definition. */
-    private $id = NULL;
+    private $id = null;
 
     /** @var string|null SQL statement for creation timestamp column. */
-    private $creation_date_sql = NULL;
+    private $creation_date_sql = null;
 
     /** @var string|null SQL statement for update timestamp column. */
-    private $updated_at_sql = NULL;
+    private $updated_at_sql = null;
+
+    /** @var bool Flag to indicate if primary key is set. */
+    private $is_set_primary_key = false;
 
     /** @var string|null SQL statement for primary key. */
-    private $primary_key_sql = NULL;
+    private $primary_key_sql = null;
 
     /** @var array List of foreign key constraints. */
     private $foreign_keys_sql = [];
@@ -43,51 +106,50 @@ class LCS_DBTable extends LCS_DBManager
     private $table_field_sql = '';
 
     /**
-     * Constructor for initializing the class.
+     * Constructor for LCS_DBTable.
      *
+     * Initializes the database connection and sets the character set and collation.
+     *
+     * @param string $credentials Database connection credentials.
+     * @param array  $options     Optional. Additional options for the database connection.
+     * @param string $sql_manager Optional. The SQL manager type (default is "PDO").
+     * @param bool   $throwErrors Optional. Whether to throw errors (default is true).
      */
-    public function __construct( string $credentials, array $options = [], string $sql_manager = "PDO" )
+    public function __construct( string $credentials, array $options = [], string $sql_manager = "PDO", bool $throwErrors = true )
     {
-        parent::__construct( $credentials, $options, $sql_manager );
+        parent::__construct( $credentials, $options, $sql_manager, $throwErrors );
         $this->charset_collate = $this->get_charset_collate();
     }
 
     /**
      * Initializes the instance to create a new table.
      *
-     * Optionally sets the table name. If a prefix is defined and not present 
+     * Sets the table name. If a prefix is defined and not present 
      * in the provided table name, it automatically prepends the prefix.
      *
-     * @param string|null $table_name Optional. The name of the table to create.
+     * @param string $table_name The name of the table to create.
      * @return $this
      */
-    public function new_table($table_name = null)
+    public function new_table($table_name)
     {
         $this->creating_table = true;
-        if ($table_name) {
-            $this->set_table_name($table_name);
-        }
+        $this->set_table_name($table_name);
         return $this;
     }
 
     /**
      * Initializes the instance to alter an existing table.
      *
-     * Optionally sets the table name. If a prefix is defined and not present 
+     * Sets the table name. If a prefix is defined and not present 
      * in the provided table name, it automatically prepends the prefix.
      *
-     * @param string|null $table_name Optional. The name of the table to alter.
+     * @param string $table_name The name of the table to alter.
      * @return $this
      */
-    public function alter_table($table_name = null)
+    public function alter_table($table_name)
     {
-        if ($table_name) {
-            $this->table_name = $table_name;
-            if ($this->prefix && strpos($table_name, $this->prefix) === false) {
-                $this->table_name = $this->prefix . $table_name;
-            }
-        }
         $this->altering_table = true;
+        $this->set_table_name($table_name);
         return $this;
     }
 
@@ -109,13 +171,13 @@ class LCS_DBTable extends LCS_DBManager
      * Sets the table name for the current operation (creation or alteration).
      *
      * Validates the operation state and the provided table name, applies the prefix if necessary,
-     * and checks for table existence. Throws exceptions if any validation fails.
+     * and throws exceptions if any validation fails.
      *
      * @param string $table_name The name of the table to set.
      * @return $this Returns the current instance for method chaining.
-     * @throws \Exception If the operation state is invalid, the table name is invalid, or the table already exists.
+     * @throws \Exception If the operation state is invalid, the table name is invalid.
      */
-    public function set_table_name($table_name)
+    private function set_table_name($table_name)
     {
         // Validate table operation state
         if (!$this->creating_table && !$this->altering_table) {
@@ -125,14 +187,10 @@ class LCS_DBTable extends LCS_DBManager
         if (!is_string($table_name) || trim($table_name) === '') {
             throw new \Exception("Table name must be a non-empty string.");
         }
+
         $this->table_name = trim($table_name);
         if ($this->prefix && strpos($table_name, $this->prefix) === false) {
             $this->table_name = $this->prefix . $table_name;
-        }
-
-        // Check if table exists and throw exception if yes
-        if ($this->is_table_exist($this->table_name)) {
-            throw new \Exception("Table already exists: " . $this->table_name);
         }
 
         return $this;
@@ -220,7 +278,7 @@ class LCS_DBTable extends LCS_DBManager
             'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT',
             'FLOAT', 'DOUBLE', 'DECIMAL', 'REAL', 'NUMERIC',
             'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR',
-            'BIT', 'BOOL'
+            'BIT', 'BOOL', 'BOOLEAN'
         ];
         return $allowed_data_types;
     }
@@ -279,12 +337,12 @@ class LCS_DBTable extends LCS_DBManager
         if (!empty($field_data['primary_key'])) {
             if ($this->creating_table) {
                 if (strpos(strtolower($this->id), 'primary key') !== false || !is_null($this->primary_key_sql)) {
-                    throw new \Exception("Primary key already set.");
+                    throw new \Exception("Primary key already set for the table '" . $this->get_full_table_name() . "'.");
                 }
 
             } elseif ($this->altering_table) {
                 if ($this->is_table_has_primary_key()) {
-                    throw new \Exception("Primary key already set.");
+                    throw new \Exception("Primary key already set for the table '" . $this->get_full_table_name() . "'.");
                 }
             }
         }
@@ -376,9 +434,9 @@ class LCS_DBTable extends LCS_DBManager
      * Ensures the format is valid and that scale does not exceed precision, 
      * along with enforcing valid ranges for both precision and scale.
      * 
-     * @param string $md The precision and scale in the format 'M,D' (e.g., '10,2').
+     * @param string|array $md The precision and scale in the format 'M,D' or as an array [M, D].
      * @return array Returns an array with two integers: [0] Precision (M), [1] Scale (D).
-     * @throws Exception Throws an exception if:
+     * @throws Exception Throws an exception if:$md The precision and scale in the format 'M,D' (e.g., '10,2').
      *    - The format is invalid.
      *    - Scale (D) is greater than precision (M).
      *    - Precision (M) is outside the range of 1 to 65.
@@ -422,6 +480,24 @@ class LCS_DBTable extends LCS_DBManager
      * ```
      */
     private function validatePrecisionAndScale($md) {
+        if (is_array($md) && count($md) === 2) {
+            $precision = (int)$md[0];
+            $scale = (int)$md[1];
+
+            // Validate precision and scale ranges
+            if ($scale > $precision) {
+                throw new \Exception('Scale (D) cannot be greater than precision (M).');
+            }
+            if ($precision < 1 || $precision > 65) {
+                throw new \Exception('Precision (M) must be between 1 and 65.');
+            }
+            if ($scale < 0) {
+                throw new \Exception('Scale (D) cannot be negative.');
+            }
+
+            return [$precision, $scale];
+        }
+
         // Step 1: Check if the format is valid: M,D (e.g., 10,2 or 100,10)
         if (!preg_match('/^(\d+),(\d+)$/', $md, $matches)) {
             throw new \Exception('Invalid format. Ensure the format is M,D (e.g., 10,2).');
@@ -533,7 +609,7 @@ class LCS_DBTable extends LCS_DBManager
 
             if ($primary_key) {
                 if ($this->is_table_has_primary_key()) {
-                    throw new \Exception("Primary key already set.");
+                    throw new \Exception("Primary key already set for the table '" . $this->get_full_table_name() . "'.");
                 }
             }
 
@@ -553,11 +629,12 @@ class LCS_DBTable extends LCS_DBManager
                 // If data type is of integer, then discard $length_or_precision
                 if ($this->is_data_type_integer($dataType)) {
                     $this->id = "`$name` $dataType PRIMARY KEY";
-                    return $this;
                 } else {
                     $this->id = "`$name` $dataType($length_or_precision) PRIMARY KEY";
-                    return $this;
                 }
+
+                $this->is_set_primary_key = true;
+                return $this;
             }
         } else {
             throw new \Exception("Table state unknown: neither creating nor altering.");
@@ -685,12 +762,12 @@ class LCS_DBTable extends LCS_DBManager
         } elseif ($this->altering_table) {
             // Check if primary key is being set and prevent duplicate primary keys
             if ($primary_key && $this->is_table_has_primary_key()) {
-                throw new \Exception("Primary key already set.");
+                throw new \Exception("Primary key already set for the field '$name'.");
             }
 
             // Check if table has auto increment column
             if ($auto_increment && $this->is_table_has_auto_increment()) {
-                throw new \Exception("Auto-increment field already set.");
+                throw new \Exception("Auto-increment field already set for the field '$name'.");
             }
         }
 
@@ -906,7 +983,7 @@ class LCS_DBTable extends LCS_DBManager
     {
         $this->validate_column_addition($name);
 
-        $default = NULL;
+        $default = 'NULL';
 
         if ($useCurrentTimeAsDefault) {
             $default = 'CURRENT_TIMESTAMP';
@@ -942,8 +1019,10 @@ class LCS_DBTable extends LCS_DBManager
             $default = "'" . $dateTime->format('Y-m-d H:i:s') . "'";
         }
 
-        $this->creation_date_sql = ($this->altering_table ? "ADD COLUMN " : "") .
+        $timestamp_sql = ($this->altering_table ? "ADD COLUMN " : "") .
             "`$name` TIMESTAMP DEFAULT $default";
+
+        $this->table_field_sql .= (empty($this->table_field_sql) ? '' : ', ') . $timestamp_sql;
 
         return $this;
     }
@@ -1131,16 +1210,22 @@ class LCS_DBTable extends LCS_DBManager
             $full_table_name = $this->get_full_table_name();
 
             // Start constructing the SQL CREATE TABLE statement
-            $sql = "CREATE TABLE IF NOT EXISTS `$full_table_name` (";
+            $sqlStarter = "CREATE TABLE IF NOT EXISTS `$full_table_name` (";
 
             // Append the primary ID field if defined (e.g., an auto-incrementing ID)
+            $sql = $sqlStarter;
             if (!empty($this->id)) {
                 $sql .= $this->id;
             }
 
             // Append additional fields defined for the table
             if (!empty($this->table_field_sql)) {
-                $sql .= ", " . $this->table_field_sql;
+                // Remove any leading comma from $sql before appending
+                if ($sql === $sqlStarter) {
+                    $sql .= $this->table_field_sql;
+                } else {
+                    $sql .= ", " . $this->table_field_sql;
+                }
             }
 
             // Append timestamp columns for record creation (if applicable)
@@ -1190,6 +1275,7 @@ class LCS_DBTable extends LCS_DBManager
             return true;
         } catch (\Exception $e) {
             // Catch and rethrow any exceptions with additional context
+            $this->reset_properties();
             throw new \Exception("Error creating table: " . $e->getMessage());
         }
     }
@@ -1214,7 +1300,7 @@ class LCS_DBTable extends LCS_DBManager
 
             // Ensure that a table name is provided
             if (empty($this->table_name)) {
-                throw new \Exception("Table name is not set. Use `set_table_name('name_of_the_table')` to set the table name.");
+                throw new \Exception("Table name is not set. Provide table name as arg in the `alter_table()` method.");
             }
 
             // Get the full table name
@@ -1294,7 +1380,8 @@ class LCS_DBTable extends LCS_DBManager
         $this->creating_table = false;
         $this->altering_table = false;
         $this->table_name = null;
-        $this->id = 'id INT(11) UNSIGNED AUTO_INCREMENT PRIMARY KEY';
+        $this->id = null;
+        $this->is_set_primary_key = false;
         $this->table_field_sql = '';
         $this->creation_date_sql = null;
         $this->updated_at_sql = null;

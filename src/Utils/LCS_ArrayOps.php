@@ -76,69 +76,78 @@ class LCS_ArrayOps
     }
 
     /**
-     * Decode a URL-encoded query string into an associative structure.
+     * Decode a URL-encoded query string or full URL into a deeply nested associative array.
      *
-     * This method supports:
-     * - Standard query strings (e.g. `key=value&key2=value2`).
-     * - Nested parameters (e.g. `user[name]=John&user[roles][0]=admin`).
+     * This function mimics JavaScript's `decodeURLQuery()` behavior:
+     * - Accepts either a full URL (e.g., "https://example.com/page?user[name]=John&page=2")
+     *   or a raw query string (e.g., "user[name]=John&page=2").
+     * - Supports nested object notation via bracket syntax (e.g., `user[name]=John`).
+     * - Supports array-like keys using numeric brackets (e.g., `user[roles][0]=admin`).
+     * - Safely ignores non-query-like strings (e.g., `/file.php` → []).
      *
-     * @param  string  $queryString     The raw query string to decode.
-     * @param  bool    $returnAsObject  If true, returns a nested stdClass object;
-     *                                  if false (default), returns an associative array.
-     * @return array|object             The decoded data as an array or object.
+     * Non-query-like strings are those that do not contain a "?" and do not match `key=value` format.
+     *
+     * @param string $queryStringOrUrl The raw query string or full URL.
+     * @return array Decoded associative array structure.
      *
      * @example
-     * ```php
-     * $query = 'user[name]=John%20Doe&user[roles][0]=admin&user[roles][1]=editor&page=2';
+     * decodeURLQuery('https://example.com/page?user[name]=John&page=2');
+     * // ['user' => ['name' => 'John'], 'page' => '2']
      *
-     * // As array (default):
-     * $arr = MyClass::decodeURLQuery($query);
-     * // [
-     * //   'user' => [
-     * //     'name'  => 'John Doe',
-     * //     'roles' => ['admin','editor']
-     * //   ],
-     * //   'page' => '2'
-     * // ]
+     * @example
+     * decodeURLQuery('user[roles][0]=admin&user[roles][1]=editor');
+     * // ['user' => ['roles' => ['admin', 'editor']]]
      *
-     * // As object:
-     * $obj = MyClass::decodeURLQuery($query, true);
-     * // stdClass {
-     * //   user => stdClass {
-     * //     name  => 'John Doe',
-     * //     roles => ['admin','editor']
-     * //   },
-     * //   page => '2'
-     * // }
-     * ```
+     * @example
+     * decodeURLQuery('/ae.php');
+     * // []
+     *
+     * @example
+     * decodeURLQuery('user[name]=John');
+     * // ['user' => ['name' => 'John']]
      */
-    public static function decodeURLQuery(string $queryString, bool $returnAsObject = false): array|object
+    public static function decodeURLQuery(string $queryStringOrUrl): array
     {
-        // Parse into an associative array
-        parse_str($queryString, $result);
-
-        if (! $returnAsObject) {
-            return $result;
+        $queryStringOrUrl = trim($queryStringOrUrl);
+        if ($queryStringOrUrl === '') {
+            return [];
         }
 
-        // Recursively convert arrays to stdClass
-        $arrayToObject = static function ($data) use (&$arrayToObject) {
-            if (! is_array($data)) {
-                return $data;
-            }
-            $obj = new \stdClass();
-            foreach ($data as $key => $value) {
-                // If numeric-keyed array, keep it as a PHP array
-                if (is_int($key)) {
-                    $obj->{$key} = is_array($value) ? array_map($arrayToObject, $value) : $value;
-                } else {
-                    $obj->{$key} = $arrayToObject($value);
-                }
-            }
-            return $obj;
-        };
+        $queryPart = '';
 
-        return $arrayToObject($result);
+        // Extract query part if URL contains '?'
+        if (strpos($queryStringOrUrl, '?') !== false) {
+            $parts = explode('?', $queryStringOrUrl, 2);
+            $queryPart = $parts[1];
+
+            // Remove fragment if present
+            $hashPos = strpos($queryPart, '#');
+            if ($hashPos !== false) {
+                $queryPart = substr($queryPart, 0, $hashPos);
+            }
+        } else {
+            // Otherwise, treat as possible query string if it looks like key=value
+            if (preg_match('/^[^\/]+=/', $queryStringOrUrl)) {
+                $queryPart = $queryStringOrUrl;
+            } else {
+                return []; // e.g., "/ae.php" or "/index.html" → not a query string
+            }
+        }
+
+        if ($queryPart === '') {
+            return [];
+        }
+
+        // Parse the query string into flat key=>value pairs
+        parse_str($queryPart, $flat);
+
+        // Flattening is automatic in PHP (parse_str builds nested arrays)
+        // But to be safe, we’ll ensure consistent array type
+        if (!is_array($flat)) {
+            return [];
+        }
+
+        return $flat;
     }
 
     /**
@@ -668,7 +677,7 @@ class LCS_ArrayOps
      */
     public static function extendArrayValue(array &$arr, $data, $position = null, string $drillPosition = "start"): array {
         if (empty($arr)) {
-            throw new InvalidArgumentException("extendArrayValue: Cannot operate on empty array.");
+            throw new \InvalidArgumentException("extendArrayValue: Cannot operate on empty array.");
         }
 
         $keys = array_keys($arr);
@@ -679,16 +688,16 @@ class LCS_ArrayOps
         } elseif (is_int($position)) {
             $idx = $position < 0 ? count($keys) + $position : $position;
             if (!isset($keys[$idx])) {
-                throw new InvalidArgumentException("extendArrayValue: Position $position is out of bounds.");
+                throw new \InvalidArgumentException("extendArrayValue: Position $position is out of bounds.");
             }
             $targetKey = $keys[$idx];
         } elseif (is_string($position)) {
             if (!array_key_exists($position, $arr)) {
-                throw new InvalidArgumentException("extendArrayValue: Key \"$position\" not found.");
+                throw new \InvalidArgumentException("extendArrayValue: Key \"$position\" not found.");
             }
             $targetKey = $position;
         } else {
-            throw new InvalidArgumentException("extendArrayValue: Invalid position type.");
+            throw new \InvalidArgumentException("extendArrayValue: Invalid position type.");
         }
 
         // Drill into nested arrays
@@ -697,7 +706,7 @@ class LCS_ArrayOps
 
         while (is_array($parent[$key])) {
             if (empty($parent[$key])) {
-                throw new InvalidArgumentException("extendArrayValue: Cannot append into empty array.");
+                throw new \InvalidArgumentException("extendArrayValue: Cannot append into empty array.");
             }
             $nestedKeys = array_keys($parent[$key]);
             $key = $drillPosition === "end" ? end($nestedKeys) : reset($nestedKeys);
@@ -709,7 +718,7 @@ class LCS_ArrayOps
         // Only scalars are extendable
         if (is_array($oldValue) || is_object($oldValue)) {
             $type = is_array($oldValue) ? "array" : "object";
-            throw new InvalidArgumentException("extendArrayValue: Cannot append into non-scalar value (type: $type).");
+            throw new \InvalidArgumentException("extendArrayValue: Cannot append into non-scalar value (type: $type).");
         }
 
         // Perform the extension

@@ -34,15 +34,17 @@ class Logs extends Exception
      *        - 2: trigger_error with specified error type
      *        - 3: throw Exception
      * @param int $errorType The error type for trigger_error when logState=2 (default E_USER_NOTICE)
+     * 
+     * @param int $exceptionCode The exception code when throwing an Exception (default 0)
      *
      * @throws Exception If logState is 3 or if an invalid logState is provided.
      */
-    public static function reportError(string $message, $logState = 1, int $errorType = E_USER_NOTICE)
+    public static function reportError(string $message, $logState = 1, int $errorType = E_USER_NOTICE, int $exceptionCode = 0)
     {
         $logState = $logState ?? self::$logState;
 
         if (!in_array($logState, [1, 2, 3], true)) {
-            throw new Exception("Invalid logState: $logState");
+            throw new Exception("Invalid logState: $logState", $exceptionCode);
         }
 
         if ($logState == 1) {

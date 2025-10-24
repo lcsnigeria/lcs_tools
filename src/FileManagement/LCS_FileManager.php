@@ -432,50 +432,107 @@ class LCS_FileManager {
     }
 
     /**
-     * Retrieves the content of a file or multiple files, with optional streaming and base64 encoding.
+     * Retrieves the content of one or more files with optional streaming, base64 encoding, and text replacements.
      *
-     * If $file is null, uses $this->file or $this->file_path. Supports both file paths and normalized file arrays.
-     * If $stream is true, reads file contents in chunks to reduce memory usage (recommended for large files).
-     * If $asBase64 is true, encodes the file content(s) in base64 (useful for JSON or HTML embedding).
-     * 
-     * @param string|array|null $file The file path or file array. If null, uses $this->file or $this->file_path.
-     * @param bool $stream If true, streams file contents in chunks; otherwise, loads entire file into memory.
-     * @param bool $asBase64 If true, returns base64-encoded content(s).
-     * @return string|array The file content(s) as raw binary data or base64-encoded string(s).
-     * @throws \Exception If the file does not exist or is invalid.
+     * This method intelligently handles single or multiple file inputs (paths or normalized upload arrays).  
+     * It can stream large files in chunks to minimize memory usage and optionally perform text replacements
+     * before returning the content (useful for template substitutions or config token injection).
+     *
+     * ⚙️ Behavior:
+     * - If `$file` is `null`, it automatically falls back to `$this->file` or `$this->file_path`.
+     * - If `$stream` is `true`, reads files progressively via `streamFileContents()` instead of loading them fully.
+     * - If `$asBase64` is `true`, returns file data encoded in Base64.
+     * - If `$replacements` is provided and `$asBase64` is `false`, performs `str_replace()` before returning the output.
+     *
+     * @param string|array|null $file
+     *     File path or normalized file array.  
+     *     If `null`, uses `$this->file` or `$this->file_path`.
+     * @param bool $stream
+     *     Whether to stream contents in chunks (recommended for large files).
+     * @param bool $asBase64
+     *     Whether to return the file content encoded in Base64.
+     * @param array $replacements
+     *     Optional associative array of replacements in the format `['search' => 'replace']`.
+     *
+     * @return string|array
+     *     File content(s) — as raw string(s) or Base64-encoded string(s).
+     *
+     * @throws \Exception
+     *     If the file is invalid, missing, or inaccessible.
+     *
+     * @example
+     * ```php
+     * // Example 1: Read a simple file
+     * $content = $fs->getFileContents('path/to/file.txt');
+     *
+     * // Example 2: Stream and encode in Base64
+     * $b64 = $fs->getFileContents('path/to/video.mp4', true, true);
+     *
+     * // Example 3: Load HTML template with replacements
+     * $html = $fs->getFileContents('template.html', false, false, [
+     *     '{{SITE_NAME}}' => 'DiamondSMS',
+     *     '{{YEAR}}' => date('Y')
+     * ]);
+     * ```
      */
-    public function getFileContents($file = null, $stream = false, $asBase64 = false) {
+    public function getFileContents($file = null, $stream = false, $asBase64 = false, array $replacements = [])
+    {
+        // Auto-determine file input if not provided
         if (is_null($file) || empty($file)) {
-            if ($this->file) {
+            if (!empty($this->file)) {
                 $file = $this->file;
-            } elseif ($this->file_path) {
+            } elseif (!empty($this->file_path)) {
                 $file = $this->file_path;
             } else {
                 throw new \Exception("No file parameter provided and no default file available.");
             }
         }
 
+        // Handle multiple uploaded or listed files
         if (is_array($file)) {
             $file = $this->normalizeFiles($file);
             $contents = [];
+
             foreach ($file as $f) {
                 $path = $f['tmp_name'] ?? null;
                 if (!$path || !file_exists($path)) {
                     throw new \Exception("File does not exist: " . ($f['name'] ?? 'unknown'));
                 }
-                $data = $stream ? $this->streamFileContents($path) : file_get_contents($path);
+
+                $data = $stream
+                    ? $this->streamFileContents($path)
+                    : file_get_contents($path);
+
+                // Perform replacements if applicable
+                if (!empty($replacements) && !$asBase64) {
+                    $data = str_replace(array_keys($replacements), array_values($replacements), $data);
+                }
+
                 $contents[] = $asBase64 ? base64_encode($data) : $data;
             }
+
             return $contents;
-        } elseif (is_string($file)) {
-            if (!file_exists($file)) {
-                throw new \Exception("File does not exist: " . $file);
-            }
-            $data = $stream ? $this->streamFileContents($file) : file_get_contents($file);
-            return $asBase64 ? base64_encode($data) : $data;
-        } else {
-            throw new \Exception("Invalid file parameter provided.");
         }
+
+        // Handle single file path
+        if (is_string($file)) {
+            if (!file_exists($file)) {
+                throw new \Exception("File does not exist: {$file}");
+            }
+
+            $data = $stream
+                ? $this->streamFileContents($file)
+                : file_get_contents($file);
+
+            // Apply replacements only when not encoding
+            if (!empty($replacements) && !$asBase64) {
+                $data = str_replace(array_keys($replacements), array_values($replacements), $data);
+            }
+
+            return $asBase64 ? base64_encode($data) : $data;
+        }
+
+        throw new \Exception("Invalid file parameter provided.");
     }
 
     /**

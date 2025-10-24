@@ -1,9 +1,6 @@
 <?php
 namespace LCSNG\Tools\Creds;
 
-// Include the LCS_Hook class for managing hooks
-use LCSNG\Tools\Hooks\LCS_Hook;
-
 /**
  * Class LCS_Creds
  *
@@ -13,140 +10,13 @@ use LCSNG\Tools\Hooks\LCS_Hook;
  */
 class LCS_Creds {
     /**
-     * Key refresh interval in seconds (24 hours).
-     */
-    const KEY_REFRESH_INTERVAL = 24 * 60 * 60;
-
-    /**
-     * Path to the environment (.env) file where keys are stored.
-     */
-    const CREDS_ENV_FILE = __DIR__ . "/.env";
-
-    /**
-     * Instance of Dotenv for managing environment variables.
-     *
-     * @var \Dotenv\Dotenv
-     */
-    private $CredsEnv;
-
-    /**
-     * Instance of the LCS_Hook class for managing hooks.
-     * 
-     * @var LCS_Hook $credsHooks The hook system instance.
-     */
-    private $credsHooks;
-
-    /**
-     * Constructor.
-     *
-     * Initializes the environment and ensures secure keys are available.
-     */
-    public function __construct()
-    {
-        /**
-         * Load environment variables from the .env file.
-         */
-        $this->CredsEnv = \Dotenv\Dotenv::createImmutable(__DIR__);
-        $this->CredsEnv->load();
-
-        /**
-         * Define the LCS_CREDS_HOOKS constant if not already defined.
-         */
-        if (!defined('LCS_CREDS_HOOKS')) {
-            define('LCS_CREDS_HOOKS', new LCS_Hook());
-        }
-
-        /**
-         * Initialize the hook system for managing actions.
-         */
-        $this->credsHooks = LCS_CREDS_HOOKS;
-
-        // Ensure keys are initialized and refreshed if necessary
-        $this->initializeKeys();
-    }
-
-    /**
-     * Ensures that keys are initialized and refreshed if necessary.
-     *
-     * This method is called on class instantiation to check whether the stored
-     * keys are valid or need to be refreshed based on the configured interval.
-     */
-    private function initializeKeys() 
-    {
-        if ($this->is_last_key_refresh_time_expired() || empty($this->get_nonce_secret_key())) {
-            $this->refresh_keys();
-        }
-    }
-
-    /**
-     * Retrieves the current nonce secret key.
-     *
-     * @return string The stored nonce secret key or an empty string if not set.
-     */
-    public function get_nonce_secret_key() 
-    {
-        return $_ENV['NONCE_SECRET_KEY'] ?? '';
-    }
-
-    /**
-     * Retrieves the last key refresh timestamp from the session.
-     *
-     * @return int The UNIX timestamp of the last refresh or 0 if not available.
-     */
-    private function get_last_key_refresh_time() 
-    {
-        $this->start_session();
-        return $_SESSION['LCS_CREDS_LAST_REFRESH_TOKEN'] ?? 0;
-    }
-
-    /**
-     * Checks if the last key refresh time has expired.
-     *
-     * @return bool True if the keys need to be refreshed, false otherwise.
-     */
-    private function is_last_key_refresh_time_expired() 
-    {
-        return (time() - $this->get_last_key_refresh_time()) >= self::KEY_REFRESH_INTERVAL;
-    }
-
-    /**
-     * Generates new secure keys and updates the .env file.
-     *
-     * This method ensures that all critical security keys are rotated and stored
-     * securely in the environment file. It also updates the last refresh timestamp.
-     */
-    private function refresh_keys() 
-    {
-        $keys = [];
-
-        // Generate a fresh nonce secret key
-        $keys['NONCE_SECRET_KEY'] = $this->generate_key();
-
-        // Convert the keys array to a properly formatted .env content string
-        $keysEnvContent = '';
-        foreach ($keys as $key => $value) {
-            $keysEnvContent .= "{$key}={$value}\n";
-        }
-
-        // Overwrite the existing .env file with the new keys
-        file_put_contents(self::CREDS_ENV_FILE, $keysEnvContent);
-
-        // Update session with the new refresh timestamp
-        $this->start_session();
-        $_SESSION['LCS_CREDS_LAST_REFRESH_TOKEN'] = time();
-
-        // Trigger hooks for key refresh
-        $this->credsHooks->do_action('creds_keys_refreshed');
-    }
-
-    /**
      * Generates a cryptographically secure key with structured details.
      *
      * @param int $length The number of bytes for the secure key (default: 32).
      * @return string A securely generated key with appended structured details.
      * @throws Exception If secure random bytes cannot be generated.
      */
-    public function generate_key(int $length = 32): string 
+    public static function generateKey(int $length = 32): string 
     {
         // Generate a secure random key
         $secureKey = bin2hex(random_bytes($length));
@@ -160,19 +30,6 @@ class LCS_Creds {
     }
 
     /**
-     * Starts a session if not already active.
-     *
-     * @return bool True if session started or already active.
-     */
-    private function start_session()
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            return session_start();
-        }
-        return true;
-    }
-
-    /**
      * Generates a random password.
      *
      * @param int $length The length of the password.
@@ -180,7 +37,7 @@ class LCS_Creds {
      * @param bool $extra_special_chars Whether to include extra special characters.
      * @return string The generated password.
      */
-    public function generate_password($length = 12, $special_chars = true, $extra_special_chars = false) {
+    public static function generatePassword($length = 12, $special_chars = true, $extra_special_chars = false) {
         $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         if ($special_chars) {
             $chars .= '!@#$%^&*()';
@@ -206,7 +63,7 @@ class LCS_Creds {
      * @return string|bool The strength of the password ('short', 'weak', 'medium', 'strong') 
      *                     or false if the password is empty or does not meet any defined criteria.
      */
-    public function password_strength($password) {
+    public static function passwordStrength($password) {
         $hasDigits = preg_match('/\d/', $password);
         $hasUppercase = preg_match('/[A-Z]/', $password);
         $hasLowercase = preg_match('/[a-z]/', $password);
@@ -261,7 +118,7 @@ class LCS_Creds {
      * @param string $password The password to hash.
      * @return string The hashed password.
      */
-    public function hash_password($password) {
+    public static function hashPassword($password) {
         // Hash the password using the default algorithm (currently bcrypt)
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
@@ -276,7 +133,7 @@ class LCS_Creds {
      * @param string $hashed_password The hashed password to verify against.
      * @return bool True if the password matches the hashed password, false otherwise.
      */
-    public function verify_password($password, $hashed_password) {
+    public static function verifyPassword($password, $hashed_password) {
         // Verify the password against the hashed password
         $password_check_result = password_verify($password, $hashed_password);
 
@@ -291,7 +148,7 @@ class LCS_Creds {
      * @param int|string|null $arg2    The type of characters to include in the code or length if $arg1 is character type. Default is 'random_bytes'.
      * @return string|bool The generated code or false if an invalid character type is provided.
      */
-    public function generate_code(...$args) {
+    public static function generateCode(...$args) {
         // Default values
         $default_length = 32; // Using 32 bytes (256 bits) for a secure secret key
         $default_character_type = 'random_bytes';
