@@ -29,13 +29,16 @@ class LCS_Requests
 
     /**
      * Initializes the request instance by setting Accept-CH headers.
-     *
-     * This method is called from the constructor to set client hints headers.
+     * Will do nothing if headers are already sent.
      *
      * @return void
      */
     private function initInstance(): void
     {
+        if (headers_sent()) {
+            return; // headers already sent, skip to avoid warnings
+        }
+
         header('Accept-CH: Sec-CH-UA, Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Mobile');
     }
 
@@ -418,6 +421,34 @@ class LCS_Requests
             echo json_encode(['error' => 'Bad or unauthorized request from ' . htmlspecialchars($clientIp)]);
             exit;
         }
+    }
+
+    /**
+     * Check if the current page is loaded normally in the browser (not via AJAX/fetch).
+     *
+     * @return bool True if the page is loaded normally, false if via AJAX/fetch.
+     *
+     * @example
+     * if (is_page_load()) {
+     *     echo "Page loaded normally in browser";
+     * } else {
+     *     echo "Page loaded via AJAX/fetch";
+     * }
+     */
+    public function is_page_load(): bool {
+        // Check for AJAX header
+        if ($this->is_ajax_request()) {
+            return false;
+        }
+
+        // Check Sec-Fetch-Mode for modern browsers
+        if (!empty($_SERVER['HTTP_SEC_FETCH_MODE']) &&
+            strtolower($_SERVER['HTTP_SEC_FETCH_MODE']) !== 'navigate') {
+            return false;
+        }
+
+        // Otherwise, assume normal browser navigation
+        return true;
     }
 
     /**
@@ -1236,6 +1267,247 @@ class LCS_Requests
     protected function contains(string $needle, string $haystack): bool
     {
         return strpos($haystack, $needle) !== false;
+    }
+
+    /**
+     * Send a HTTP request via cURL with safe, production defaults.
+     *
+     * @param string $url Request URL.
+     * @param array|string|null $data Data to send. If array and method is POST/PUT, will be JSON-encoded.
+     * @param array $options Optional overrides (UPPERCASE keys preferred):
+     *   - METHOD: 'GET'|'POST'|'PUT'|'DELETE' (auto-detected if omitted)
+     *   - HEADERS: array of additional headers (e.g. ['X-Custom: val'])
+     *   - API_KEY: string (will add "Authorization: Bearer {api_key}" header)
+     *   - ORIGIN: string (Origin header value)
+     *   - TIMEOUT: int seconds (request timeout) default 15
+     *   - CONNECT_TIMEOUT: int seconds default 5
+     *   - CURL: array - raw CURLOPT_* => value pairs to merge/override
+     *
+     * @return array{
+     *   success: bool, // The success of the request; true if no cURL error occurred, else false
+     *   http_code: int, // The HTTP status code returned by the server (e.g., 200, 404)
+     *   headers: array<string,string>, // Associative array of response headers 
+     *   body: string, // The raw response body as a string 
+     *   json: array|object|null, // The decoded JSON response, or null if decoding failed
+     *   error: string|null, // The cURL error message if an error occurred, else null
+     *   curl_errno: int|null // The cURL error number if an error occurred, else null
+     * }
+     */
+    public function send_curl(string $url, $data = null, array $options = []): array
+    {
+        // Read options from UPPERCASE keys first, fallback to lowercase
+        $method = strtoupper((string)($options['METHOD'] ?? $options['method'] ?? ($data === null ? 'GET' : 'POST')));
+        $timeout = (int)($options['TIMEOUT'] ?? $options['timeout'] ?? 15);
+        $connectTimeout = (int)($options['CONNECT_TIMEOUT'] ?? $options['connect_timeout'] ?? 5);
+        $userHeaders = $options['HEADERS'] ?? $options['headers'] ?? [];
+        $apiKey = $options['API_KEY'] ?? $options['api_key'] ?? null;
+        $origin = $options['ORIGIN'] ?? $options['origin'] ?? null;
+        $extraCurl = $options['CURL'] ?? $options['curl'] ?? [];
+
+        $ch = curl_init();
+
+        // Prepare body and URL for GET/DELETE
+        $body = '';
+        if (in_array($method, ['GET', 'DELETE'], true) && !empty($data) && is_array($data)) {
+            $query = http_build_query($data);
+            $url .= (strpos($url, '?') === false ? '?' : '&') . $query;
+        } elseif (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+            if (is_array($data)) {
+                $body = json_encode($data, JSON_UNESCAPED_UNICODE);
+            } elseif (is_string($data)) {
+                $body = $data;
+            }
+        }
+
+        // Default headers
+        $defaultHeaders = ['Accept: application/json'];
+
+        // Add Content-Type only if body present and not overridden by user
+        if ($body !== '') {
+            $hasContentType = false;
+            foreach ($userHeaders as $uh) {
+                if (stripos($uh, 'Content-Type:') === 0) {
+                    $hasContentType = true;
+                    break;
+                }
+            }
+            if (! $hasContentType) {
+                $defaultHeaders[] = 'Content-Type: application/json';
+            }
+        }
+
+        // Authorization
+        if (!empty($apiKey)) {
+            $defaultHeaders[] = 'Authorization: Bearer ' . $apiKey;
+        }
+
+        // Origin header if provided (useful for CORS-aware servers)
+        if (!empty($origin)) {
+            $origin = rtrim($origin, '/');
+            $defaultHeaders[] = 'Origin: ' . $origin;
+        }
+
+        // Merge headers (user headers override defaults by header name)
+        $merged = $this->mergeHeaders($defaultHeaders, $userHeaders);
+
+        // Base cURL options
+        $curlDefaults = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_POSTREDIR => CURL_REDIR_POST_ALL, 
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER => $merged,
+        ];
+
+        // Method handling
+        switch ($method) {
+            case 'GET':
+                $curlDefaults[CURLOPT_HTTPGET] = true;
+                break;
+            case 'POST':
+                $curlDefaults[CURLOPT_POST] = true;
+                if ($body !== '') {
+                    $curlDefaults[CURLOPT_POSTFIELDS] = $body;
+                }
+                break;
+            default:
+                $curlDefaults[CURLOPT_CUSTOMREQUEST] = $method;
+                if ($body !== '') {
+                    $curlDefaults[CURLOPT_POSTFIELDS] = $body;
+                }
+                break;
+        }
+
+        // Apply extra raw CURLOPTs (numeric keys expected)
+        $finalCurlOptions = $curlDefaults;
+        if (!empty($extraCurl) && is_array($extraCurl)) {
+            foreach ($extraCurl as $k => $v) {
+                $finalCurlOptions[(int)$k] = $v;
+            }
+        }
+
+        curl_setopt_array($ch, $finalCurlOptions);
+
+        // Execute
+        $raw = curl_exec($ch);
+        $curlErrNo = curl_errno($ch);
+        $curlErr = $curlErrNo ? curl_error($ch) : null;
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+
+        if ($curlErrNo) {
+            return [
+                'success' => false,
+                'http_code' => $httpCode,
+                'headers' => [],
+                'body' => '',
+                'json' => null,
+                'error' => $curlErr,
+                'curl_errno' => $curlErrNo,
+            ];
+        }
+
+        // Split headers and body
+        $rawHeaders = substr($raw, 0, $headerSize);
+        $bodyRaw = substr($raw, $headerSize);
+
+        $parsedHeaders = $this->parseRawHeaders($rawHeaders);
+
+        $decoded = json_decode($bodyRaw, true);
+        $json = (json_last_error() === JSON_ERROR_NONE) ? $decoded : null;
+
+        return [
+            'success' => true,
+            'http_code' => $httpCode,
+            'headers' => $parsedHeaders,
+            'body' => $bodyRaw,
+            'json' => $json,
+            'error' => null,
+            'curl_errno' => null,
+        ];
+    }
+
+    /**
+     * Determine whether a send_curl() result should be considered successful.
+     *
+     * Accepts the array returned by send_curl(). Success criteria:
+     *  - No cURL error number present
+     *  - If 'success' key exists and is false => not successful
+     *  - HTTP status code is in the 2xx range
+     *
+     * @param array|null $curlResult Result from send_curl()
+     * @return bool True when request is successful, false otherwise
+     */
+    public function is_curl_successful(?array $curlResult): bool
+    {
+        if (empty($curlResult) || !is_array($curlResult)) {
+            return false;
+        }
+
+        // If cURL reported an error number, fail
+        if (!empty($curlResult['curl_errno'])) {
+            return false;
+        }
+
+        // If explicit success flag exists and is false, fail
+        if (array_key_exists('success', $curlResult) && $curlResult['success'] === false) {
+            return false;
+        }
+
+        // Use HTTP status code 2xx as the canonical success range
+        $httpCode = isset($curlResult['http_code']) ? (int)$curlResult['http_code'] : 0;
+        return $httpCode >= 200 && $httpCode < 300;
+    }
+
+    /**
+     * Merge two header arrays. User headers override defaults by header name.
+     *
+     * @param array $defaults e.g. ['Content-Type: application/json']
+     * @param array $user     e.g. ['Content-Type: text/plain', 'X-Trace: 1']
+     * @return array merged headers
+     */
+    private function mergeHeaders(array $defaults, array $user): array
+    {
+        $map = [];
+        $normalizeKey = function (string $header) {
+            $parts = explode(':', $header, 2);
+            return trim(strtolower($parts[0]));
+        };
+        foreach ($defaults as $h) {
+            $map[$normalizeKey($h)] = $h;
+        }
+        foreach ($user as $h) {
+            $map[$normalizeKey($h)] = $h;
+        }
+        return array_values($map);
+    }
+
+    /**
+     * Parse raw header block returned by cURL into associative array.
+     *
+     * @param string $rawHeaders
+     * @return array<string,string>
+     */
+    private function parseRawHeaders(string $rawHeaders): array
+    {
+        $headers = [];
+        $blocks = preg_split('/\r\n\r\n/', trim($rawHeaders));
+        $last = array_pop($blocks);
+        $lines = preg_split('/\r\n/', $last);
+        array_shift($lines); // remove status line
+        foreach ($lines as $line) {
+            if (strpos($line, ':') === false) continue;
+            [$key, $val] = explode(':', $line, 2);
+            $headers[trim($key)] = trim($val);
+        }
+        return $headers;
     }
 
     /**

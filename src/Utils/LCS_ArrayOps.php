@@ -742,5 +742,26 @@ class LCS_ArrayOps
         return array_keys($arr) !== range(0, count($arr) - 1);
     }
 
+    /**
+     * Check if an array is a list of arrays (numeric-indexed array where each item is itself an array).
+     *
+     * Examples:
+     * - [['a'=>1], ['b'=>2]] → true
+     * - ['a'=>1, 'b'=>2] → false
+     * - [] → false
+     *
+     * @param array $arr The array to check.
+     * @return bool True if $arr is a non-empty numeric array of arrays, false otherwise.
+     */
+    public static function isArrayOfArrays(array $arr): bool
+    {
+        if (empty($arr)) {
+            return false;
+        }
+
+        // Check numeric keys (0..n-1) and that first element is an array
+        return self::isArrayKeysSequential($arr) && is_array($arr[0]);
+    }
+
 
 }
