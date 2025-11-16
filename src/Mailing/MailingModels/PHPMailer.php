@@ -96,10 +96,13 @@ class PHPMailer extends MailingConfigs
     {
         try {
             $toArray = !is_array($to) ? [$to] : $to;
-            foreach ( $toArray as $t ) {
-                list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
-                // Set recipient
-                $this->mailer->addAddress($recipientEmail, $recipientName);
+            foreach ($toArray as $t) {
+                try {
+                    list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+                    $this->mailer->addAddress($recipientEmail, $recipientName);
+                } catch (Exception $e) {
+                    Logs::reportError("Invalid recipient $t: {$e->getMessage()}", 1);
+                }
             }
             
             $this->setPMSenderAndReplyTo($headers);
@@ -120,7 +123,8 @@ class PHPMailer extends MailingConfigs
             $this->mailer->send();
             return true;
         } catch (Exception $e) {
-            Logs::reportError("Email could not be sent to $to. Error: {$this->mailer->ErrorInfo}", 1);
+            $toStr = is_array($to) ? implode(', ', $to) : $to;
+            Logs::reportError("Email could not be sent to $toStr. Error: {$this->mailer->ErrorInfo}", 1);
             return false;
         }
     }
