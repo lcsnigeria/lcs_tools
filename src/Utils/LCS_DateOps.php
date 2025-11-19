@@ -2,11 +2,11 @@
 namespace LCSNG\Tools\Utils;
 
 /**
- * Class LCS_Date
+ * Class LCS_DateOps
  *
  * Provides utilities for date and time-related operations.
  */
-class LCS_Date {
+class LCS_DateOps {
     /**
      * Provides a time-based greeting.
      *
@@ -135,15 +135,18 @@ class LCS_Date {
         try {
             // Create a DateTime object from the input string
             $date = new \DateTime($string);
-            $format = strtolower(trim($format));
 
-            // Return timestamp for time-based requests
-            if (in_array($format, ['getastime', 'time', 'seconds'], true)) {
+            // Preserve original for raw PHP format strings
+            $formatOriginal = trim($format);
+            $formatLower = strtolower($formatOriginal);
+
+            // Timestamp-based outputs
+            if (in_array($formatLower, ['getastime', 'time', 'seconds'], true)) {
                 return $date->getTimestamp();
             }
 
-            // Handle predefined readable formats
-            switch ($format) {
+            // Predefined friendly formats
+            switch ($formatLower) {
                 case 'standard':
                     return $date->format('Y-m-d');
                 case 'modern':
@@ -153,12 +156,11 @@ class LCS_Date {
                 case 'modern with time':
                     return $date->format('d-m-Y H:i:s');
                 default:
-                    // Assume it's a valid PHP date format string
-                    return $date->format($format);
+                    // Use the original (case-sensitive) format
+                    return $date->format($formatOriginal);
             }
 
         } catch (\Exception $e) {
-            // Propagate error with descriptive message
             throw new \Exception("Invalid date string: '$string'. " . $e->getMessage(), 0, $e);
         }
     }
@@ -254,6 +256,27 @@ class LCS_Date {
         
         // Default: return difference in days
         return abs($datetime1->diff($datetime2)->days);
+    }
+
+    /**
+     * Get the number of days between two datetime strings
+     *
+     * @param string $date1 First date (e.g., '2025-11-19 14:38:30')
+     * @param string $date2 Second date (e.g., '2025-11-25 10:00:00')
+     * @return int Absolute number of days between the dates
+     *
+     * Sample usage:
+     *   $days = getDaysDifference('2025-11-19 14:38:30', '2025-11-25 10:00:00');
+     */
+    public function getDaysDifference(string $date1, string $date2): int {
+        $dt1 = new \DateTime($date1);
+        $dt2 = new \DateTime($date2);
+
+        // Get the difference
+        $diff = $dt1->diff($dt2);
+
+        // Return absolute number of days
+        return (int) $diff->format('%a');
     }
 
     /**
