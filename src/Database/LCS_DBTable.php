@@ -392,7 +392,7 @@ class LCS_DBTable extends LCS_DBManager
         if (empty($field_data['primary_key']) && isset($field_data['default'])) {
             if ( is_numeric($field_data['default']) || $field_data['default'] === NULL || $field_data['default'] === 'NULL') {
                 $default_sql = " DEFAULT {$field_data['default']}";
-            } elseif (!$field_data['default'] || $field_data['default'] === false ) {
+            } elseif (!$field_data['default'] || $field_data['default'] === false || strtoupper($field_data['default']) === 'NOT NULL' ) {
                 $default_sql = ' NOT NULL';
             } else {
                 $default_sql = " DEFAULT '{$field_data['default']}'";
