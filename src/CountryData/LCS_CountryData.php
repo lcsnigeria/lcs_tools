@@ -1,8 +1,6 @@
 <?php 
 namespace LCSNG\Tools\CountryData;
 
-require __DIR__ . '/../../vendor/autoload.php';
-
 use LCSNG\Tools\CountryData\Traits\CountryCode;
 use LCSNG\Tools\CountryData\Traits\CountryCurrency;
 
