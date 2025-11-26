@@ -141,6 +141,13 @@ class LCS_DBManager
     /** @var bool $inTransaction Flag to track active transactions. */
     private $inTransaction = false;
 
+    /**
+     * Tracks nested transaction depth (for PDO savepoints)
+     *
+     * @var int
+     */
+    private $transactionDepth = 0;
+
     /** @var array $supported_placeholders Supported SQL placeholders for prepared statements. */
     const SQL_MANAGERS = ['PDO', 'MySQLi'];
 
@@ -982,53 +989,77 @@ class LCS_DBManager
     /**
      * Starts a new database transaction.
      *
-     * @return void
-     * @throws Exception If the transaction cannot be started.
+     * @return bool True on success, false on failure.
      */
-    public function startTransaction() {
+    public function startTransaction(): bool
+    {
         try {
-            if ($this->isInTransaction()) {
-                $this->inTransaction = true;
-            }
-
             if ($this->is_pdo_manager()) {
-                $this->connection->beginTransaction();
+                if (!$this->connection->inTransaction()) {
+                    $this->connection->beginTransaction();
+                } else {
+                    // Nested transaction: use savepoint
+                    $this->transactionDepth = ($this->transactionDepth ?? 0) + 1;
+                    $this->connection->exec("SAVEPOINT LEVEL{$this->transactionDepth}");
+                }
             } else {
-                $this->connection->begin_transaction();
+                if (empty($this->inTransaction)) {
+                    $this->connection->begin_transaction();
+                    $this->inTransaction = true;
+                } else {
+                    $this->transactionDepth = ($this->transactionDepth ?? 0) + 1;
+                }
             }
 
-            $this->inTransaction = true; // Set the flag to true after starting the transaction
-        } catch (\Exception $e) {
+            return true;
+        } catch (\Throwable $e) {
             $this->reportError("Transaction start error: " . $e->getMessage());
+            return false;
         }
     }
 
     /**
      * Commits the current database transaction.
      *
-     * @return void
-     * @throws Exception If the transaction cannot be committed.
+     * @return bool True on success, false on failure.
      */
-    public function commit() {
+    public function commit(): bool
+    {
         try {
             if (!$this->isInTransaction()) {
                 return true;
             }
 
-            $this->connection->commit();
-            $this->inTransaction = false; // Reset the flag after committing
-        } catch (\Exception $e) {
+            if ($this->is_pdo_manager()) {
+                if (!empty($this->transactionDepth)) {
+                    $this->connection->exec("RELEASE SAVEPOINT LEVEL{$this->transactionDepth}");
+                    $this->transactionDepth--;
+                } else {
+                    $this->connection->commit();
+                }
+            } else {
+                if (!empty($this->transactionDepth)) {
+                    $this->transactionDepth--;
+                } elseif (!empty($this->inTransaction)) {
+                    $this->connection->commit();
+                    $this->inTransaction = false;
+                }
+            }
+
+            return true;
+        } catch (\Throwable $e) {
             $this->reportError("Transaction commit error: " . $e->getMessage());
+            return false;
         }
     }
 
     /**
      * Rolls back the current database transaction.
      *
-     * @return void
-     * @throws Exception If the transaction cannot be rolled back.
+     * @return bool True on success, false on failure.
      */
-    public function rollBack() {
+    public function rollBack(): bool
+    {
         try {
             if (!$this->isInTransaction()) {
                 $this->inTransaction = false;
@@ -1036,14 +1067,25 @@ class LCS_DBManager
             }
 
             if ($this->is_pdo_manager()) {
-                $this->connection->rollBack();
+                if (!empty($this->transactionDepth)) {
+                    $this->connection->exec("ROLLBACK TO SAVEPOINT LEVEL{$this->transactionDepth}");
+                    $this->transactionDepth--;
+                } else {
+                    $this->connection->rollBack();
+                }
             } else {
-                $this->connection->rollback();
+                if (!empty($this->transactionDepth)) {
+                    $this->transactionDepth--;
+                } elseif (!empty($this->inTransaction)) {
+                    $this->connection->rollback();
+                    $this->inTransaction = false;
+                }
             }
 
-            $this->inTransaction = false; // Reset the flag after rolling back
-        } catch (\Exception $e) {
+            return true;
+        } catch (\Throwable $e) {
             $this->reportError("Transaction rollback error: " . $e->getMessage());
+            return false;
         }
     }
 
@@ -1052,13 +1094,14 @@ class LCS_DBManager
      *
      * @return bool True if a transaction is active, false otherwise.
      */
-    private function isInTransaction() {
+    private function isInTransaction(): bool
+    {
         if ($this->is_pdo_manager()) {
-            // For PDO, rely on the manual flag tracking
-            return isset($this->inTransaction) && $this->inTransaction;
+            // For PDO, use PDO::inTransaction() directly
+            return $this->connection instanceof \PDO && $this->connection->inTransaction();
         } else {
-            // For MySQLi, track the state manually with $this->inTransaction
-            return $this->inTransaction;
+            // For MySQLi, rely on manual tracking
+            return !empty($this->inTransaction) && $this->inTransaction === true;
         }
     }
 
