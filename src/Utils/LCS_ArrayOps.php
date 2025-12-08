@@ -814,7 +814,7 @@ class LCS_ArrayOps
      * print_r($result['head']); // ['a', 'b', 'c']
      * print_r($result['tail']); // ['d']
      */
-    public function arrayPartition(array $items, int $count, bool $unique = false): array
+    public static function arrayPartition(array $items, int $count, bool $unique = false): array
     {
         // If uniqueness is requested, filter duplicate values while maintaining
         // their first-seen order. This avoids reindexing or reordering the array.
