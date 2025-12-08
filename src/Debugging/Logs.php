@@ -26,13 +26,6 @@ class Logs extends Exception
     private static $logState = 1;
 
     /**
-     * Default log file path.
-     *
-     * @var string
-     */
-    private static $defaultLogFile = null;
-
-    /**
      * Custom error type constants.
      */
     const USER_ERROR = 'USER_ERROR';
@@ -55,12 +48,6 @@ class Logs extends Exception
      */
     public static function init(?string $logFile = null, int $logState = 1): void
     {
-        if ($logFile === null) {
-            $path = ini_get('error_log');
-            $logFile = !empty($path) ? $path : dirname(__FILE__) . '/logs/app.log';
-        }
-
-        self::$defaultLogFile = $logFile;
         self::$logState = $logState;
 
         // Create log directory if it doesn't exist
@@ -95,7 +82,12 @@ class Logs extends Exception
         ?string $logFile = null
     ): bool {
         $logState = $logState ?? self::$logState;
-        $logFile = $logFile ?? self::$defaultLogFile;
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
+        }
+
+        // Initialize file
+        self::init($logFile);
 
         if (!in_array($logState, [1, 2, 3], true)) {
             throw new Exception("Invalid logState: $logState. Must be 1, 2, or 3.", $exceptionCode);
@@ -116,11 +108,6 @@ class Logs extends Exception
         $formattedMessage = "[$timestamp] [$errorTypeString] $message | File: $fileLocation";
 
         if ($logState === 1) {
-            // Initialize if not done
-            if (self::$defaultLogFile === null) {
-                self::init();
-            }
-            
             // Write to custom log file
             return self::writeToLogFile($formattedMessage, $logFile);
         } elseif ($logState === 2) {
@@ -145,12 +132,12 @@ class Logs extends Exception
      */
     public static function reportLogs(string $logType, string $message, ?string $logFile = null): bool
     {
-        // Initialize if not done
-        if (self::$defaultLogFile === null) {
-            self::init();
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
         }
 
-        $logFile = $logFile ?? self::$defaultLogFile;
+        // Initialize file
+        self::init($logFile);
 
         // Get caller information
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
@@ -178,12 +165,9 @@ class Logs extends Exception
      */
     public static function renderLogsUI(?string $errorFile = null, int $limit = 100): string
     {
-        // Initialize if not done
-        if (self::$defaultLogFile === null) {
-            self::init();
+        if ($errorFile === null) {
+            $errorFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
         }
-
-        $errorFile = $errorFile ?? self::$defaultLogFile;
 
         if (!file_exists($errorFile)) {
             return self::generateNoLogsHTML($errorFile);
@@ -202,12 +186,9 @@ class Logs extends Exception
      */
     public static function clearLogs(?string $errorFile = null, ?string $timestamp = null): bool
     {
-        // Initialize if not done
-        if (self::$defaultLogFile === null) {
-            self::init();
+        if ($errorFile === null) {
+            $errorFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
         }
-
-        $errorFile = $errorFile ?? self::$defaultLogFile;
 
         if (!file_exists($errorFile)) {
             return false;
@@ -241,10 +222,8 @@ class Logs extends Exception
      */
     public static function getLogCount(?string $logFile = null, ?string $logType = null): int
     {
-        $logFile = $logFile ?? self::$defaultLogFile;
-
-        if (!file_exists($logFile)) {
-            return 0;
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
         }
 
         $logs = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -275,7 +254,9 @@ class Logs extends Exception
      */
     public static function getLogs(?string $logFile = null, int $limit = 0, ?string $logType = null): array
     {
-        $logFile = $logFile ?? self::$defaultLogFile;
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
+        }
 
         if (!file_exists($logFile)) {
             return [];
@@ -293,7 +274,9 @@ class Logs extends Exception
      */
     public static function exportLogs(?string $logFile = null, string $format = 'txt'): void
     {
-        $logFile = $logFile ?? self::$defaultLogFile;
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
+        }
 
         if (!file_exists($logFile)) {
             header('HTTP/1.0 404 Not Found');
@@ -336,7 +319,9 @@ class Logs extends Exception
      */
     public static function archiveLogs(?string $logFile = null, int $daysOld = 30): bool
     {
-        $logFile = $logFile ?? self::$defaultLogFile;
+        if ($logFile === null) {
+            $logFile = !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
+        }
 
         if (!file_exists($logFile)) {
             return false;
@@ -400,7 +385,7 @@ class Logs extends Exception
      */
     public static function getDefaultLogFile(): ?string
     {
-        return self::$defaultLogFile;
+        return !empty(ini_get('error_log')) ? ini_get('error_log') : dirname(__FILE__) . '/logs/app.log';
     }
 
     // ========== Private Helper Methods ==========

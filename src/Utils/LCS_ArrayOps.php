@@ -763,5 +763,94 @@ class LCS_ArrayOps
         return self::isArrayKeysSequential($arr) && is_array($arr[0]);
     }
 
+    /**
+     * Partition an array into two segments: a "head" containing the first N items
+     * and a "tail" containing all remaining items. Optionally removes duplicates
+     * from the source array before partitioning, while preserving the original order
+     * of first appearance.
+     *
+     * This function is useful when you need to take a fixed number of items from the
+     * start of a dataset (pagination, previews, batching, progressive loading, etc.)
+     * and still retain the rest without reprocessing the array multiple times.
+     *
+     * When `$unique` is enabled, duplicates are removed using a stable-first-seen
+     * approach. This means the first occurrence of each value is kept, and later
+     * occurrences are ignored. Order is never changed.
+     *
+     * ---------------------------------------------------------------------------
+     * PARAMETERS
+     * ---------------------------------------------------------------------------
+     * @param array $items
+     *        The input array to be partitioned.
+     *
+     * @param int $count
+     *        Number of items to place in the "head" portion.
+     *        - Values less than 0 default to 0.
+     *        - Values greater than array size simply return the entire array as head.
+     *
+     * @param bool $unique
+     *        If true, duplicates are removed *before* partitioning.
+     *        Useful for datasets with redundancy where you still want
+     *        order preservation.
+     *
+     * ---------------------------------------------------------------------------
+     * RETURNS
+     * ---------------------------------------------------------------------------
+     * @return array{
+     *     head: array,   // First N items after optional uniqueness filtering
+     *     tail: array    // Remaining items
+     * }
+     *
+     * ---------------------------------------------------------------------------
+     * SAMPLE USAGE
+     * ---------------------------------------------------------------------------
+     * @sample
+     * $result = arrayPartition(['a','b','a','c','c','d'], 3, true);
+     *
+     * // After uniqueness: ['a','b','c','d']
+     * // head => ['a','b','c']
+     * // tail => ['d']
+     *
+     * print_r($result['head']); // ['a', 'b', 'c']
+     * print_r($result['tail']); // ['d']
+     */
+    public function arrayPartition(array $items, int $count, bool $unique = false): array
+    {
+        // If uniqueness is requested, filter duplicate values while maintaining
+        // their first-seen order. This avoids reindexing or reordering the array.
+        if ($unique) {
+            $seen = [];         // Tracks values we have encountered
+            $uniqueItems = [];  // Stores unique values in order
+
+            foreach ($items as $value) {
+                // Strict comparison ensures type-consistent uniqueness (true !== "1")
+                if (!in_array($value, $seen, true)) {
+                    $seen[] = $value;
+                    $uniqueItems[] = $value;
+                }
+            }
+
+            // Replace source items with the stable, unique-only set
+            $items = $uniqueItems;
+        }
+
+        // Normalize invalid negative counts to 0 to avoid unexpected slicing behavior
+        if ($count < 0) {
+            $count = 0;
+        }
+
+        // Slice the first N items (head)
+        $head = array_slice($items, 0, $count);
+
+        // Slice everything after N (tail)
+        $tail = array_slice($items, $count);
+
+        // Return in a descriptive structured format
+        return [
+            'head' => $head,
+            'tail' => $tail,
+        ];
+    }
+
 
 }
