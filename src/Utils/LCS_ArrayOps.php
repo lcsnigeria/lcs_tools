@@ -12,6 +12,13 @@ namespace LCSNG\Tools\Utils;
 class LCS_ArrayOps 
 {
     /**
+     * Stores the last index picked to prevent immediate repetition.
+     *
+     * @var int|null
+     */
+    private static ?int $lastIndex = null;
+
+    /**
      * Encode an associative array or object into a URL-encoded query string,
      * supporting nested structures with custom separators and optional encoding.
      *
@@ -852,5 +859,96 @@ class LCS_ArrayOps
         ];
     }
 
+    /**
+     * Shuffle an array and optionally return a single random item.
+     *
+     * This method serves two purposes:
+     * 1. Return a **fully shuffled array**.
+     * 2. Return a **single random item** (head) while ensuring it is not
+     *    the same as the last item returned consecutively.
+     *
+     * The method uses a static property `$lastIndex` to track the last
+     * picked index and prevent immediate repetition. If the array has
+     * only one item, that item is always returned.
+     *
+     * ---------------------------------------------------------------------------
+     * PARAMETERS
+     * ---------------------------------------------------------------------------
+     * @param array $items
+     *        The array to shuffle. Can contain any values, including
+     *        associative arrays, objects, or scalars.  
+     *        If empty, the method returns `[]` (full array) or `null`
+     *        (single item).
+     *
+     * @param bool $returnHead
+     *        If true, the method returns a **single random item**,
+     *        ensuring it is not the same as the last one returned.  
+     *        If false, the method returns a **fully shuffled array**.
+     *
+     * ---------------------------------------------------------------------------
+     * RETURNS
+     * ---------------------------------------------------------------------------
+     * @return array|mixed
+     *        - Returns a shuffled array if `$returnHead` is false.  
+     *        - Returns a single item if `$returnHead` is true.  
+     *        - Returns `null` if array is empty and `$returnHead` is true.
+     *
+     * ---------------------------------------------------------------------------
+     * SAMPLE USAGE
+     * ---------------------------------------------------------------------------
+     * $messages = [
+     *     ['body' => 'message 1'],
+     *     ['body' => 'message 2'],
+     *     ['body' => 'message 3'],
+     * ];
+     *
+     * // Return a single random message, avoiding immediate repeat
+     * $item = ArrayUtils::arrayShuffle($messages, true);
+     * echo $item['body'];
+     *
+     * // Return a fully shuffled array
+     * $shuffled = ArrayUtils::arrayShuffle($messages);
+     * print_r($shuffled);
+     *
+     * // Loop multiple times to show no consecutive repeats
+     * for ($i = 0; $i < 10; $i++) {
+     *     $item = ArrayUtils::arrayShuffle($messages, true);
+     *     echo $item['body'] . PHP_EOL;
+     * }
+     */
+    public static function arrayShuffle(array $items, bool $returnHead = false)
+    {
+        $count = count($items);
+
+        // Handle empty array
+        if ($count === 0) {
+            return $returnHead ? null : [];
+        }
+
+        // Only one item? Always return it
+        if ($count === 1) {
+            self::$lastIndex = 0;
+            return $returnHead ? $items[0] : $items;
+        }
+
+        // Pick a random index different from last returned
+        do {
+            $index = random_int(0, $count - 1);
+        } while ($index === self::$lastIndex);
+
+        // Update static property to track last index
+        self::$lastIndex = $index;
+
+        // Return single item if requested
+        if ($returnHead) {
+            return $items[$index];
+        }
+
+        // Otherwise, shuffle the entire array
+        $shuffled = $items;
+        shuffle($shuffled);
+
+        return $shuffled;
+    }
 
 }
