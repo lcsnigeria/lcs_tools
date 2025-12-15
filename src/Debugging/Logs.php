@@ -438,6 +438,67 @@ class Logs extends Exception
     }
 
     /**
+     * Extracts the primary error category from a complex error type string.
+     *
+     * This method simplifies complex error type identifiers (e.g., "USER_ERROR", 
+     * "E_WARNING", "DATABASE_ERROR", "LOGIN_ERROR") into their primary category 
+     * keywords for consistent classification, filtering, and UI presentation.
+     *
+     * The extraction follows a priority-based matching system, checking for keywords
+     * in this order: critical, security, warning, debug, info, user, error.
+     * This ensures more specific categories take precedence over generic ones.
+     *
+     * @param string|null $errorType The error type string to categorize. Accepts any case 
+     *                                format (e.g., "USER_ERROR", "user_warning", "Api_Error").
+     *                                If null or empty, defaults to 'error'.
+     * 
+     * @return string The extracted category as a lowercase string. Returns one of:
+     *                'critical', 'security', 'warning', 'debug', 'info', 'user', or 'error'.
+     *                Defaults to 'error' if no recognizable category is found.
+     *
+     * @example
+     * Logs::extractErrorCategory('USER_ERROR');        // Returns: 'user'
+     * Logs::extractErrorCategory('DATABASE_ERROR');    // Returns: 'database'
+     * Logs::extractErrorCategory('CRITICAL_FAILURE');  // Returns: 'critical'
+     * Logs::extractErrorCategory('SECURITY_BREACH');   // Returns: 'security'
+     * Logs::extractErrorCategory('E_WARNING');         // Returns: 'warning'
+     * Logs::extractErrorCategory('DEBUG_INFO');        // Returns: 'debug'
+     * Logs::extractErrorCategory(null);                // Returns: 'error'
+     */
+    public static function extractErrorCategory(?string $errorType = null): string
+    {
+        // Convert to lowercase for case-insensitive comparison
+        $errorType = strtolower((string)$errorType);
+
+        // Return default if empty
+        if (empty($errorType)) {
+            return 'error';
+        }
+
+        // Priority-ordered keywords for category extraction
+        $categoryKeywords = [
+            'critical',  // Highest priority: system-critical failures
+            'security',  // Security-related events and breaches
+            'warning',   // Non-critical warnings and alerts
+            'debug',     // Debug and development information
+            'info',      // Informational messages
+            'database', // Database related errors
+            'user',      // User-triggered errors
+            'error'      // Generic errors (lowest priority)
+        ];
+
+        // Extract category by checking for keyword matches
+        foreach ($categoryKeywords as $keyword) {
+            if (strpos($errorType, $keyword) !== false) {
+                return $keyword;
+            }
+        }
+
+        // Fallback to generic 'error' category
+        return 'error';
+    }
+
+    /**
      * Maps custom error types to PHP error constants for trigger_error.
      *
      * @param string|int $errorType Error type
