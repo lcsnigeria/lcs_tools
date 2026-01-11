@@ -1143,92 +1143,718 @@ class LCS_DBManager
     }
 
     /**
-     * Restores an accidentally deleted table.
+     * Backs up a table with its complete definition and data.
      *
-     * @param array $table_data Array containing the table name, structure, and rows.
-     *                          Should be retrieved from the backup (e.g., lcs_bu_tables.db).
+     * This method uses SHOW CREATE TABLE to capture the exact table definition including:
+     * - Column definitions (types, NULL/NOT NULL, DEFAULT values, AUTO_INCREMENT)
+     * - Primary keys and all indexes
+     * - Foreign key constraints
+     * - Table engine, charset, collation, and other metadata
+     *
+     * This is the only safe way to backup a table for faithful restoration.
+     *
+     * @param string $table_name Name of the table to backup.
+     * @param string|null $backup_file Optional custom backup file path. 
+     *                                 Defaults to 'lcs_bu_tables.db' in the current directory.
+     * @param bool $append Whether to append to existing backup file (true) or overwrite (false).
      * @return bool True on success, or throws an exception on failure.
-     * @throws Exception If there is an error during table restoration.
+     * @throws Exception If there is an error retrieving table data or writing to the backup file.
      */
-    public function restore_table($table_data) {
-
-        // Ensure required keys exist in $table_data
-        if (!isset($table_data['table_name'], $table_data['structure'], $table_data['rows'])) {
-            $this->reportError("Invalid table data provided. 'table_name', 'structure', and 'rows' are required.");
+    public function backup_table($table_name, $backup_file = null, $append = true) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_tables.db';
         }
 
-        $tableName = $table_data['table_name'];
-        $tableStructure = $table_data['structure'];
-        $rows = $table_data['rows'];
+        // Adjust table name with prefix
+        $table_prefix = $this->prefix ?? '';
+        $table = (strpos($table_name, $table_prefix) === 0) ? $table_name : $table_prefix . $table_name;
 
-        // Create the table SQL query
-        $sqlCreateTable = "CREATE TABLE IF NOT EXISTS `$tableName` (";
-        foreach ($tableStructure as $column) {
-            $sqlCreateTable .= "`{$column['Field']}` {$column['Type']}, ";
-        }
-        $sqlCreateTable = rtrim($sqlCreateTable, ", ") . ")";
-
-        // Execute table creation
-        $createTableResult = $this->query($sqlCreateTable);
-        if (!$createTableResult) {
-            $this->reportError("Error creating table: " . $this->last_error);
+        // Get the complete CREATE TABLE statement
+        $createResult = $this->get_row("SHOW CREATE TABLE `$table`");
+        if (!$createResult) {
+            $this->reportError("Failed to get CREATE TABLE statement for table '$table'.");
         }
 
-        // Insert rows into the table
-        $sqlInsertRows = "INSERT INTO `$tableName` (" . implode(", ", array_keys($rows[0])) . ") VALUES ";
-        foreach ($rows as $row) {
-            $sqlInsertRows .= "(" . implode(", ", array_map([$this, 'purify_sql'], array_values($row))) . "), ";
-        }
-        $sqlInsertRows = rtrim($sqlInsertRows, ", ");
+        // Extract the CREATE TABLE SQL (it's the second column in the result)
+        $createArray = (array)$createResult;
+        $createSql = array_values($createArray)[1];
 
-        // Execute row insertion
-        $insertRowsResult = $this->query($sqlInsertRows);
-        if ($insertRowsResult === false) {
-            $this->reportError("Error inserting rows: " . $this->last_error);
+        // Get all rows from the table
+        $rows = $this->get_results("SELECT * FROM `$table`");
+        if ($rows === false) {
+            $rows = []; // Empty table is valid
         }
 
-        return true; // Success
+        // Convert rows to arrays for consistent storage
+        if ($this->FETCH_MODE === 'OBJECT') {
+            $rows = array_map(fn($row) => (array)$row, $rows);
+        }
+
+        // Prepare backup data
+        $table_backup = [
+            'table_name' => $table,
+            'create_sql' => $createSql,
+            'rows' => $rows,
+            'backup_timestamp' => date('Y-m-d H:i:s'),
+            'row_count' => count($rows)
+        ];
+
+        // Load existing backups if appending
+        $existing_backups = [];
+        if ($append && file_exists($backup_file)) {
+            $file_contents = file_get_contents($backup_file);
+            if ($file_contents !== false) {
+                $existing_backups = unserialize($file_contents);
+                if (!is_array($existing_backups)) {
+                    $existing_backups = [];
+                }
+            }
+        }
+
+        // Store backup with table name as key
+        $existing_backups[$table] = $table_backup;
+
+        // Serialize and save to file
+        $serialized_data = serialize($existing_backups);
+        $result = file_put_contents($backup_file, $serialized_data, LOCK_EX);
+
+        if ($result === false) {
+            $this->reportError("Failed to write backup data to file '$backup_file'.");
+        }
+
+        return true;
     }
 
     /**
-     * Retrieves the entire table along with its structure and data.
+     * Backs up multiple tables to a single backup file.
      *
-     * @param string $table_name Name of the table.
-     * @return array The table data and structure, or throws an exception on failure.
-     * @throws Exception If there is an error retrieving the table data or structure.
+     * @param array $table_names Array of table names to backup.
+     * @param string|null $backup_file Optional custom backup file path.
+     * @return bool True on success, or throws an exception on failure.
+     * @throws Exception If there is an error during the backup process.
      */
-    public function get_table_data($table_name) {
+    public function backup_tables(array $table_names, $backup_file = null) {
+        
+        if (empty($table_names)) {
+            $this->reportError("No table names provided for backup.");
+        }
 
-        // Adjust table name with prefix
-        $table_prefix = $this->prefix;
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_tables.db';
+        }
+
+        $all_backups = [];
+
+        // Load existing backups if file exists
+        if (file_exists($backup_file)) {
+            $file_contents = file_get_contents($backup_file);
+            if ($file_contents !== false) {
+                $existing = unserialize($file_contents);
+                if (is_array($existing)) {
+                    $all_backups = $existing;
+                }
+            }
+        }
+
+        // Backup each table
+        foreach ($table_names as $table_name) {
+            // Adjust table name with prefix
+            $table_prefix = $this->prefix ?? '';
+            $table = (strpos($table_name, $table_prefix) === 0) ? $table_name : $table_prefix . $table_name;
+
+            // Get CREATE TABLE statement
+            $createResult = $this->get_row("SHOW CREATE TABLE `$table`");
+            if (!$createResult) {
+                $this->reportError("Failed to get CREATE TABLE for '$table'. Skipping.");
+                continue;
+            }
+
+            $createArray = (array)$createResult;
+            $createSql = array_values($createArray)[1];
+
+            // Get all rows
+            $rows = $this->get_results("SELECT * FROM `$table`");
+            if ($rows === false) {
+                $rows = [];
+            }
+
+            // Convert rows to arrays
+            if ($this->FETCH_MODE === 'OBJECT') {
+                $rows = array_map(fn($row) => (array)$row, $rows);
+            }
+
+            // Store backup
+            $all_backups[$table] = [
+                'table_name' => $table,
+                'create_sql' => $createSql,
+                'rows' => $rows,
+                'backup_timestamp' => date('Y-m-d H:i:s'),
+                'row_count' => count($rows)
+            ];
+        }
+
+        // Save all backups to file
+        $serialized_data = serialize($all_backups);
+        $result = file_put_contents($backup_file, $serialized_data, LOCK_EX);
+
+        if ($result === false) {
+            $this->reportError("Failed to write backup data to file '$backup_file'.");
+        }
+
+        return true;
+    }
+
+    /**
+     * Restores a table from backup data.
+     *
+     * This method restores a table using the complete CREATE TABLE statement captured during backup,
+     * ensuring all indexes, constraints, and metadata are preserved exactly as they were.
+     *
+     * @param array $table_data Array containing 'table_name', 'create_sql', and 'rows'.
+     * @param bool $drop_existing Whether to drop the existing table before restoring (default: true).
+     * @return bool True on success, or throws an exception on failure.
+     * @throws Exception If there is an error during table restoration.
+     */
+    public function restore_table($table_data, $drop_existing = true) {
+
+        // Validate backup data structure
+        if (!isset($table_data['table_name'], $table_data['create_sql'], $table_data['rows'])) {
+            $this->reportError("Invalid table data provided. Required keys: 'table_name', 'create_sql', 'rows'.");
+        }
+
+        $tableName = $table_data['table_name'];
+        $createSql = $table_data['create_sql'];
+        $rows = $table_data['rows'];
+
+        // Start transaction for atomic restore
+        $this->startTransaction();
+
+        try {
+            // Drop existing table if requested
+            if ($drop_existing) {
+                $this->query("DROP TABLE IF EXISTS `$tableName`");
+            }
+
+            // Recreate table with exact definition
+            $createResult = $this->query($createSql);
+            if (!$createResult) {
+                throw new \Exception("Failed to recreate table: " . $this->last_error);
+            }
+
+            // Insert rows if any exist
+            if (!empty($rows)) {
+                // Temporarily disable foreign key checks for safer restore
+                $this->query("SET FOREIGN_KEY_CHECKS = 0");
+
+                foreach ($rows as $row) {
+                    $this->insert($tableName, $row);
+                }
+
+                // Re-enable foreign key checks
+                $this->query("SET FOREIGN_KEY_CHECKS = 1");
+            }
+
+            // Commit transaction
+            $this->commit();
+            return true;
+
+        } catch (\Exception $e) {
+            // Rollback on error
+            $this->rollBack();
+            $this->reportError("Error restoring table '$tableName': " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Lists all tables backed up in a backup file.
+     *
+     * @param string|null $backup_file Optional custom backup file path.
+     * @return array Array of backed up table names with their backup information.
+     * @throws Exception If the backup file doesn't exist or cannot be read.
+     */
+    public function list_backups($backup_file = null) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_tables.db';
+        }
+
+        // Check if backup file exists
+        if (!file_exists($backup_file)) {
+            $this->reportError("Backup file '$backup_file' does not exist.");
+        }
+
+        // Read and unserialize backup file
+        $file_contents = file_get_contents($backup_file);
+        if ($file_contents === false) {
+            $this->reportError("Failed to read backup file '$backup_file'.");
+        }
+
+        $backups = unserialize($file_contents);
+        if (!is_array($backups)) {
+            $this->reportError("Invalid backup file format in '$backup_file'.");
+        }
+
+        // Return list of backed up tables with metadata
+        $backup_list = [];
+        foreach ($backups as $table_name => $table_data) {
+            $backup_list[] = [
+                'table_name' => $table_name,
+                'backup_timestamp' => $table_data['backup_timestamp'] ?? 'Unknown',
+                'row_count' => $table_data['row_count'] ?? count($table_data['rows'] ?? [])
+            ];
+        }
+
+        return $backup_list;
+    }
+
+    /**
+     * Retrieves backup data for a specific table from the backup file.
+     * This is a helper method that can be used with restore_table().
+     *
+     * @param string $table_name Name of the table to retrieve from backup.
+     * @param string|null $backup_file Optional custom backup file path.
+     * @return array Table backup data in the format expected by restore_table().
+     * @throws Exception If the backup file doesn't exist or table is not found.
+     */
+    public function get_backup_data($table_name, $backup_file = null) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_tables.db';
+        }
+
+        // Check if backup file exists
+        if (!file_exists($backup_file)) {
+            $this->reportError("Backup file '$backup_file' does not exist.");
+        }
+
+        // Read and unserialize backup file
+        $file_contents = file_get_contents($backup_file);
+        if ($file_contents === false) {
+            $this->reportError("Failed to read backup file '$backup_file'.");
+        }
+
+        $backups = unserialize($file_contents);
+        if (!is_array($backups)) {
+            $this->reportError("Invalid backup file format in '$backup_file'.");
+        }
+
+        // Adjust table name with prefix for lookup
+        $table_prefix = $this->prefix ?? '';
         $table = (strpos($table_name, $table_prefix) === 0) ? $table_name : $table_prefix . $table_name;
 
-        // Query to retrieve all rows from the table
-        $query = "SELECT * FROM {$this->sanitize_data($table)}";
+        // Check if table exists in backup
+        if (!isset($backups[$table])) {
+            $this->reportError("Table '$table_name' not found in backup file '$backup_file'.");
+        }
 
-        // Execute the query
-        $result = $this->query($query);
-        if (!$result) {
+        return $backups[$table];
+    }
+
+    /**
+     * Gets all table names in the current database.
+     *
+     * @param bool $with_prefix Whether to include only tables with the configured prefix (default: false).
+     * @return array Array of table names.
+     * @throws Exception If there is an error retrieving table names.
+     */
+    public function get_table_names($with_prefix = false) {
+        
+        // Query to get all tables in the current database
+        $tables = $this->get_col("SHOW TABLES");
+        
+        if ($tables === false || $tables === null) {
+            $this->reportError("Failed to retrieve table names from database '$this->dbname'.");
+        }
+
+        // Filter by prefix if requested and prefix is set
+        if ($with_prefix && !empty($this->prefix)) {
+            $tables = array_filter($tables, function($table) {
+                return strpos($table, $this->prefix) === 0;
+            });
+        }
+
+        return array_values($tables); // Re-index array
+    }
+
+    /**
+     * Checks if a table is already backed up in the backup file.
+     *
+     * @param string $table_name Name of the table to check.
+     * @param string|null $backup_file Optional custom backup file path.
+     * @return bool True if the table is backed up, false otherwise.
+     */
+    public function is_table_backed_up($table_name, $backup_file = null) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_tables.db';
+        }
+
+        // If backup file doesn't exist, table is not backed up
+        if (!file_exists($backup_file)) {
+            return false;
+        }
+
+        // Read and unserialize backup file
+        $file_contents = file_get_contents($backup_file);
+        if ($file_contents === false) {
+            return false;
+        }
+
+        $backups = unserialize($file_contents);
+        if (!is_array($backups)) {
+            return false;
+        }
+
+        // Adjust table name with prefix for lookup
+        $table_prefix = $this->prefix ?? '';
+        $table = (strpos($table_name, $table_prefix) === 0) ? $table_name : $table_prefix . $table_name;
+
+        // Check if table exists in backup
+        return isset($backups[$table]);
+    }
+
+    /**
+     * Backs up the entire database.
+     *
+     * This method backs up all tables in the current database to a single backup file.
+     * It intelligently skips tables that are already backed up (unless $force_overwrite is true)
+     * and provides detailed progress feedback.
+     *
+     * @param string|null $backup_file Optional custom backup file path.
+     * @param bool $force_overwrite Whether to overwrite existing table backups (default: false).
+     * @param bool $with_prefix_only Whether to backup only tables with the configured prefix (default: false).
+     * @return array Statistics about the backup operation.
+     * @throws Exception If there is an error during the backup process.
+     */
+    public function backup_db($backup_file = null, $force_overwrite = false, $with_prefix_only = false) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_database_' . $this->dbname . '.db';
+        }
+
+        // Get all table names
+        $all_tables = $this->get_table_names($with_prefix_only);
+        
+        if (empty($all_tables)) {
+            $this->reportError("No tables found in database '$this->dbname'.");
+        }
+
+        // Load existing backups if file exists
+        $existing_backups = [];
+        if (file_exists($backup_file)) {
+            $file_contents = file_get_contents($backup_file);
+            if ($file_contents !== false) {
+                $existing = unserialize($file_contents);
+                if (is_array($existing)) {
+                    $existing_backups = $existing;
+                }
+            }
+        }
+
+        // Statistics tracking
+        $stats = [
+            'total_tables' => count($all_tables),
+            'backed_up' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'tables_backed_up' => [],
+            'tables_skipped' => [],
+            'tables_failed' => [],
+            'start_time' => microtime(true),
+            'backup_file' => $backup_file
+        ];
+
+        // Backup each table
+        foreach ($all_tables as $table_name) {
+            
+            // Check if already backed up and skip if not forcing overwrite
+            if (!$force_overwrite && $this->is_table_backed_up($table_name, $backup_file)) {
+                $stats['skipped']++;
+                $stats['tables_skipped'][] = $table_name;
+                continue;
+            }
+
+            try {
+                // Get CREATE TABLE statement
+                $createResult = $this->get_row("SHOW CREATE TABLE `$table_name`");
+                if (!$createResult) {
+                    throw new \Exception("Failed to get CREATE TABLE statement");
+                }
+
+                $createArray = (array)$createResult;
+                $createSql = array_values($createArray)[1];
+
+                // Get all rows
+                $rows = $this->get_results("SELECT * FROM `$table_name`");
+                if ($rows === false) {
+                    $rows = [];
+                }
+
+                // Convert rows to arrays
+                if ($this->FETCH_MODE === 'OBJECT') {
+                    $rows = array_map(fn($row) => (array)$row, $rows);
+                }
+
+                // Store backup
+                $existing_backups[$table_name] = [
+                    'table_name' => $table_name,
+                    'create_sql' => $createSql,
+                    'rows' => $rows,
+                    'backup_timestamp' => date('Y-m-d H:i:s'),
+                    'row_count' => count($rows)
+                ];
+
+                $stats['backed_up']++;
+                $stats['tables_backed_up'][] = $table_name;
+
+            } catch (\Exception $e) {
+                $stats['failed']++;
+                $stats['tables_failed'][] = [
+                    'table' => $table_name,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        // Add database metadata to backup
+        $existing_backups['__metadata__'] = [
+            'database_name' => $this->dbname,
+            'backup_timestamp' => date('Y-m-d H:i:s'),
+            'total_tables' => $stats['backed_up'],
+            'charset' => $this->charset,
+            'collate' => $this->collate
+        ];
+
+        // Save all backups to file
+        $serialized_data = serialize($existing_backups);
+        $result = file_put_contents($backup_file, $serialized_data, LOCK_EX);
+
+        if ($result === false) {
+            $this->reportError("Failed to write backup data to file '$backup_file'.");
+        }
+
+        // Calculate duration
+        $stats['end_time'] = microtime(true);
+        $stats['duration_seconds'] = round($stats['end_time'] - $stats['start_time'], 2);
+
+        return $stats;
+    }
+
+    /**
+     * Restores the entire database from a backup file.
+     *
+     * This method restores all tables from a backup file, intelligently handling:
+     * - Tables that already exist (drops and recreates by default)
+     * - Foreign key dependencies (temporarily disables checks)
+     * - Transaction rollback on errors
+     * - Detailed progress tracking
+     *
+     * @param string|null $backup_file Optional custom backup file path.
+     * @param bool $drop_existing Whether to drop existing tables before restoring (default: true).
+     * @param array|null $tables_to_restore Optional array of specific table names to restore. 
+     *                                      If null, restores all tables in backup.
+     * @return array Statistics about the restore operation.
+     * @throws Exception If the backup file doesn't exist or is invalid.
+     */
+    public function restore_db($backup_file = null, $drop_existing = true, $tables_to_restore = null) {
+        
+        // Set default backup file if not provided
+        if (is_null($backup_file)) {
+            $backup_file = 'lcs_bu_database_' . $this->dbname . '.db';
+        }
+
+        // Check if backup file exists
+        if (!file_exists($backup_file)) {
+            $this->reportError("Backup file '$backup_file' does not exist.");
+        }
+
+        // Read and unserialize backup file
+        $file_contents = file_get_contents($backup_file);
+        if ($file_contents === false) {
+            $this->reportError("Failed to read backup file '$backup_file'.");
+        }
+
+        $backups = unserialize($file_contents);
+        if (!is_array($backups)) {
+            $this->reportError("Invalid backup file format in '$backup_file'.");
+        }
+
+        // Extract metadata and remove it from backups array
+        $metadata = $backups['__metadata__'] ?? null;
+        unset($backups['__metadata__']);
+
+        // Determine which tables to restore
+        $tables = is_null($tables_to_restore) ? array_keys($backups) : $tables_to_restore;
+
+        if (empty($tables)) {
+            $this->reportError("No tables found in backup file to restore.");
+        }
+
+        // Statistics tracking
+        $stats = [
+            'total_tables' => count($tables),
+            'restored' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'tables_restored' => [],
+            'tables_skipped' => [],
+            'tables_failed' => [],
+            'start_time' => microtime(true),
+            'backup_file' => $backup_file,
+            'metadata' => $metadata
+        ];
+
+        // Disable foreign key checks for safe restoration
+        $this->query("SET FOREIGN_KEY_CHECKS = 0");
+
+        // Start a transaction for the entire restore operation
+        $this->startTransaction();
+
+        try {
+            foreach ($tables as $table_name) {
+                
+                // Check if table exists in backup
+                if (!isset($backups[$table_name])) {
+                    $stats['skipped']++;
+                    $stats['tables_skipped'][] = [
+                        'table' => $table_name,
+                        'reason' => 'Not found in backup'
+                    ];
+                    continue;
+                }
+
+                $table_data = $backups[$table_name];
+
+                // Validate backup data structure
+                if (!isset($table_data['table_name'], $table_data['create_sql'], $table_data['rows'])) {
+                    $stats['failed']++;
+                    $stats['tables_failed'][] = [
+                        'table' => $table_name,
+                        'error' => 'Invalid backup data structure'
+                    ];
+                    continue;
+                }
+
+                try {
+                    $tableName = $table_data['table_name'];
+                    $createSql = $table_data['create_sql'];
+                    $rows = $table_data['rows'];
+
+                    // Check if table already exists
+                    $table_exists = $this->is_table_exist($tableName);
+
+                    // Drop existing table if requested
+                    if ($table_exists && $drop_existing) {
+                        $this->query("DROP TABLE IF EXISTS `$tableName`");
+                    } elseif ($table_exists && !$drop_existing) {
+                        $stats['skipped']++;
+                        $stats['tables_skipped'][] = [
+                            'table' => $tableName,
+                            'reason' => 'Table already exists and drop_existing is false'
+                        ];
+                        continue;
+                    }
+
+                    // Recreate table with exact definition
+                    $createResult = $this->query($createSql);
+                    if (!$createResult) {
+                        throw new \Exception("Failed to recreate table: " . $this->last_error);
+                    }
+
+                    // Insert rows if any exist
+                    $rows_inserted = 0;
+                    if (!empty($rows)) {
+                        foreach ($rows as $row) {
+                            $this->insert($tableName, $row);
+                            $rows_inserted++;
+                        }
+                    }
+
+                    $stats['restored']++;
+                    $stats['tables_restored'][] = [
+                        'table' => $tableName,
+                        'rows_restored' => $rows_inserted
+                    ];
+
+                } catch (\Exception $e) {
+                    $stats['failed']++;
+                    $stats['tables_failed'][] = [
+                        'table' => $table_name,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            // Commit transaction
+            $this->commit();
+
+            // Re-enable foreign key checks
+            $this->query("SET FOREIGN_KEY_CHECKS = 1");
+
+        } catch (\Exception $e) {
+            // Rollback on error
+            $this->rollBack();
+            $this->query("SET FOREIGN_KEY_CHECKS = 1");
+            $this->reportError("Database restore failed: " . $e->getMessage());
+        }
+
+        // Calculate duration
+        $stats['end_time'] = microtime(true);
+        $stats['duration_seconds'] = round($stats['end_time'] - $stats['start_time'], 2);
+
+        return $stats;
+    }
+
+    /**
+     * DEPRECATED: Use backup_table() instead.
+     * This method is kept for backward compatibility but will be removed in future versions.
+     * 
+     * Retrieves the entire table along with its structure and data.
+     * WARNING: This method does NOT capture indexes, foreign keys, or table metadata.
+     *
+     * @param string $table_name Name of the table.
+     * @return array The table data and structure (incomplete - missing indexes/constraints).
+     * @throws Exception If there is an error retrieving the table data or structure.
+     * @deprecated Use backup_table() for complete and safe table backups.
+     */
+    public function get_table_data($table_name) {
+        // Adjust table name with prefix
+        $table_prefix = $this->prefix ?? '';
+        $table = (strpos($table_name, $table_prefix) === 0) ? $table_name : $table_prefix . $table_name;
+
+        // Get all rows using the proper get_results method
+        $table_data = $this->get_results("SELECT * FROM `$table`");
+        
+        if ($table_data === false) {
             $this->reportError("Failed to retrieve data for table '$table'.");
         }
 
-        $table_data = $result->fetch_all(MYSQLI_ASSOC);
-
-        // Get the table structure
-        $structure_query = "DESCRIBE {$this->sanitize_data($table)}";
-        $structure_result = $this->query($structure_query);
+        // Get the table structure using DESCRIBE
+        $structure_result = $this->get_results("DESCRIBE `$table`");
 
         if (!$structure_result) {
             $this->reportError("Failed to retrieve table structure for table '$table'.");
         }
 
-        $table_structure = $structure_result->fetch_all(MYSQLI_ASSOC);
+        // Convert objects to arrays if needed
+        if ($this->FETCH_MODE === 'OBJECT') {
+            $table_data = array_map(fn($row) => (array)$row, $table_data);
+            $structure_result = array_map(fn($row) => (array)$row, $structure_result);
+        }
 
         return [
             'table_name' => $table,
-            'structure' => $table_structure,
+            'structure' => $structure_result,
             'rows' => $table_data
-        ]; // Success
+        ];
     }
 
     /**
@@ -1550,7 +2176,7 @@ class LCS_DBManager
      */
     private function reportError( $message, $code = 0 ) {
         $this->last_error = $message;
-        Logs::reportError( $message, $this->throwError ? 3 : 1, E_USER_NOTICE, $code );
+        Logs::reportError( $message, $this->throwError ? 3 : 1, 'DATABASE_ERROR', $code );
     }
 
     /**
