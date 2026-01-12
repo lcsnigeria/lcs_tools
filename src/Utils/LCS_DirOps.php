@@ -295,4 +295,48 @@ class LCS_DirOps
         return $html;
     }
 
+    /**
+     * Auto-require all PHP files in the given directory,
+     * excluding files matching the $exclude value or any value in the $exclude array.
+     *
+     * @param string $dir Absolute or relative path to directory.
+     * @param string|array $exclude Optional file name(s) to skip (exact or partial match at end of path).
+     * @return void
+     *
+     * @example
+     * ```php
+     * // Load all helpers except 'autoload.php' and 'config.php'
+     * SystemFunctions::loadPHP(__DIR__ . '/helpers', ['autoload.php', 'config.php']);
+     * ```
+     */
+    public static function loadPHP(string $dir, string|array $exclude = []): void
+    {
+        // Normalize exclude to array
+        $excludeFiles = (array) $exclude;
+
+        // Ensure directory exists
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        // Get all .php files in directory
+        $allFiles = glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*.php') ?: [];
+
+        // Filter and require
+        foreach ($allFiles as $file) {
+            $isExcluded = false;
+
+            foreach ($excludeFiles as $excl) {
+                if (preg_match('/' . preg_quote($excl, '/') . '$/i', $file)) {
+                    $isExcluded = true;
+                    break;
+                }
+            }
+
+            if (!$isExcluded) {
+                require_once $file;
+            }
+        }
+    }
+
 }
