@@ -70,6 +70,9 @@ use LCSNG\Tools\Debugging\Logs;
  */
 class LCS_DBManager 
 {
+    /** @var array $DB_PLATFORMS Supported database platforms. */
+    CONST DB_PLATFORMS = ['mysql', 'pgsql', 'sqlite', 'sqlsrv'];
+
     /** @var bool $throwError Whether to throw exceptions on errors or just log them. */
     public $throwError = true;
 
@@ -113,6 +116,9 @@ class LCS_DBManager
 
     /** @var string|null $socket Database socket path. */
     private $socket = null;
+
+    /** @var string|null $mysql_engine MySQL engine type (default: InnoDB). */
+    private $mysql_engine = 'InnoDB';
 
     /** @var string $charset Character set for the connection (default: utf8mb4). */
     private $charset = 'utf8mb4';
@@ -412,7 +418,13 @@ class LCS_DBManager
                     $this->prefix = $credValue;
                     unset($extendedCredsArray[$credKey]);
                     break;
+                case 'mysql_engine':
+                    $this->mysql_engine = $credValue;
+                    unset($extendedCredsArray[$credKey]);
+                    break;
                 case 'charset':
+                case 'default_charset':
+                case 'character_set':
                     $this->charset = $credValue;
                     break;
                 case 'collation':
@@ -480,6 +492,45 @@ class LCS_DBManager
             $this->reportError("Error fetching charset and collation: " . $e->getMessage());
             return "CHARACTER SET $default_charset COLLATE $default_collation";
         }
+    }
+
+    /**
+     * Retrieves the database engine type for the specified platform.
+     *
+     * Currently, only MySQL is supported.
+     *
+     * @param string $platform The database platform (default: 'mysql').
+     * @return string|null The engine type for the platform, or null if unsupported.
+     */
+    public function get_engine_type($platform = 'mysql') {
+        // Currently only MySQL is supported
+        if ( ! in_array( strtolower( $platform), $this->DB_PLATFORMS ) ) {
+            $this->reportError("Unsupported database platform '$platform' for engine type retrieval.");
+            return null;
+        }
+
+        if (strtolower($platform) === 'mysql') {
+            return $this->mysql_engine;
+        }
+        return null;
+    }
+
+    /**
+     * Retrieves the default character set for the database connection.
+     *
+     * @return string The default character set.
+     */
+    public function get_default_charset() {
+        return $this->charset;
+    }
+
+    /**
+     * Retrieves the database collation setting.
+     *
+     * @return string The collation setting.
+     */
+    public function get_collation() {
+        return $this->collate;
     }
 
     /**
