@@ -495,6 +495,15 @@ class LCS_DBManager
     }
 
     /**
+     * Retrieves the table prefix used in the database connection.
+     *
+     * @return string|null The table prefix, or null if not set.
+     */
+    public function get_table_prefix() {
+        return $this->prefix;
+    }
+
+    /**
      * Retrieves the database engine type for the specified platform.
      *
      * Currently, only MySQL is supported.
@@ -502,16 +511,17 @@ class LCS_DBManager
      * @param string $platform The database platform (default: 'mysql').
      * @return string|null The engine type for the platform, or null if unsupported.
      */
-    public function get_engine_type($platform = 'mysql') {
+    public function get_engine_type( $platform = 'mysql' ) {
         // Currently only MySQL is supported
-        if ( ! in_array( strtolower( $platform), $this->DB_PLATFORMS ) ) {
-            $this->reportError("Unsupported database platform '$platform' for engine type retrieval.");
+        if ( ! in_array( strtolower( $platform) , self::DB_PLATFORMS ) ) {
+            $this->reportError( "Unsupported database platform '$platform' for engine type retrieval." );
             return null;
         }
 
-        if (strtolower($platform) === 'mysql') {
+        if ( strtolower($platform) === 'mysql' ) {
             return $this->mysql_engine;
         }
+
         return null;
     }
 
