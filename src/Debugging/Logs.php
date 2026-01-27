@@ -157,6 +157,70 @@ class Logs extends Exception
     }
 
     /**
+     * Extract the human-readable message from a formatted log line.
+     *
+     * Strictly removes only:
+     *  - Timestamp blocks: [YYYY-MM-DD HH:MM:SS]
+     *  - Log type blocks: [UPPERCASE_WITH_UNDERSCORES]
+     *
+     * Preserves any other square-bracketed content.
+     *
+     * Handles nested / repeated log wrapping safely.
+     *
+     * @param string $logLine Raw log line
+     * @return string Clean message only
+     *
+     * @example
+     * Logs::extractLogMessage(
+     *   '[2026-01-24 16:08:25] [USER_CREATE_ERROR] Email already exists: a@b.com'
+     * );
+     * // → "Email already exists: a@b.com"
+     */
+    public static function extractLogMessage(string $logLine): string
+    {
+        // Remove BOM and normalize
+        $message = trim(preg_replace('/^\x{FEFF}/u', '', $logLine));
+        if ($message === '') {
+            return '';
+        }
+
+        /**
+         * Strict patterns
+         */
+        $timestampPattern = '\[\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\]';
+        $typePattern      = '\[[A-Z0-9_]+\]';
+
+        /**
+         * 1) Repeatedly remove leading "[timestamp] [TYPE]" pairs
+         */
+        $leadingPattern = '/^\s*' . $timestampPattern . '\s*' . $typePattern . '\s*/';
+
+        while (preg_match($leadingPattern, $message)) {
+            $message = preg_replace($leadingPattern, '', $message, 1);
+        }
+
+        /**
+         * 2) Remove nested occurrences anywhere else in the string
+         *    (e.g. wrapped exception messages)
+         */
+        $nestedPattern = '/' . $timestampPattern . '\s*' . $typePattern . '\s*/';
+        $message = preg_replace($nestedPattern, '', $message);
+
+        /**
+         * 3) Remove trailing file info (may appear multiple times)
+         */
+        $message = preg_replace('/(?:\s*\|\s*File:\s*.+?)+$/', '', $message);
+
+        /**
+         * 4) Final cleanup
+         */
+        $message = trim($message);
+        $message = rtrim($message, " \t\n\r\0\x0B:");
+
+        return $message;
+    }
+
+    /**
      * Renders a beautiful HTML UI for viewing logs.
      *
      * @param string|null $errorFile Path to the log file. Uses default if null.

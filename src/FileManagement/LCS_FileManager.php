@@ -216,6 +216,12 @@ class LCS_FileManager {
     public $mark_valid = false;
 
     /**
+     * @var array $uploadedFileNames
+     * Stores the names of files that have been successfully uploaded.
+     */
+    public $uploadedFileNames = [];
+
+    /**
      * @var int $previous_time_limit
      * Stores the previous `max_execution_time` PHP configuration value.
      * This is used to revert back to the original execution time limit after file operations are completed.
@@ -708,8 +714,18 @@ class LCS_FileManager {
     }
 
     /**
+     * Retrieves the names of files that have been successfully uploaded.
+     *
+     * @return array The names of the uploaded files.
+     */
+    public function getUploadedFileNames(): array {
+        return $this->uploadedFileNames;
+    }
+
+    /**
      * Uploads multiple files to the specified directory based on their purpose.
      *
+     * @param bool $forceConfigs Whether to force creation of the target directory if it doesn't exist.
      * @return array The names of the uploaded files.
      * @throws Exception If any file is invalid or an upload fails.
      */
@@ -819,6 +835,7 @@ class LCS_FileManager {
             $uploadedFiles[] = $newfileName;
         }
 
+        $this->uploadedFileNames = $uploadedFiles;
         return $uploadedFiles;
     }
 
