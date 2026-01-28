@@ -102,6 +102,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         ),
         'E' =>
         array (
+            'Endroid\\QrCode\\' => 15,
             'Egulias\\EmailValidator\\' => 23,
         ),
         'D' =>
@@ -109,6 +110,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'Dotenv\\' => 7,
             'Doctrine\\Common\\Lexer\\' => 22,
             'DeviceDetector\\' => 15,
+            'DASPRiD\\Enum\\' => 13,
         ),
         'C' =>
         array (
@@ -118,6 +120,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             'Brick\\Math\\' => 11,
             'Base64Url\\' => 10,
+            'BaconQrCode\\' => 12,
         ),
     );
 
@@ -308,6 +311,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/graham-campbell/result-type/src',
         ),
+        'Endroid\\QrCode\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/endroid/qr-code/src',
+        ),
         'Egulias\\EmailValidator\\' =>
         array (
             0 => __DIR__ . '/..' . '/egulias/email-validator/src',
@@ -324,6 +331,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/matomo/device-detector',
         ),
+        'DASPRiD\\Enum\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/dasprid/enum/src',
+        ),
         'Clue\\StreamFilter\\' =>
         array (
             0 => __DIR__ . '/..' . '/clue/stream-filter/src',
@@ -335,6 +346,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'Base64Url\\' =>
         array (
             0 => __DIR__ . '/..' . '/spomky-labs/base64url/src',
+        ),
+        'BaconQrCode\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/bacon/bacon-qr-code/src',
         ),
     );
 

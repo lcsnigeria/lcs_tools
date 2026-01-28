@@ -1,6 +1,11 @@
 <?php
 namespace LCSNG\Tools\Creds;
 
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\ErrorCorrectionLevel;
+
 /**
  * Class LCS_Creds
  *
@@ -206,5 +211,31 @@ class LCS_Creds {
 
         return $code;
     }
+
+    /**
+     * Generate QR code image as a data URI (endroid/qr-code v6).
+     *
+     * @param string $data - The data to encode in the QR code.
+     * @return string - The QR code image as a data URI.
+     *
+     * Usage:
+     * <img src="<?= $qrImage ?>" alt="2FA QR Code">
+     */
+    public static function generateQRCodeDataUri(string $data): string
+    {
+        $qrCode = new QrCode(
+            data: $data,
+            encoding: new Encoding('UTF-8'),
+            errorCorrectionLevel: ErrorCorrectionLevel::Low,
+            size: 200,
+            margin: 10
+        );
+
+        $writer = new PngWriter();
+        $result = $writer->write($qrCode);
+
+        return $result->getDataUri();
+    }
+
 
 }

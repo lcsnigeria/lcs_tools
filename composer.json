@@ -21,7 +21,8 @@
         "mailgun/mailgun-php": "^4.3",
         "nyholm/psr7": "^1.8",
         "resend/resend-php": "^0.18.0",
-        "matomo/device-detector": "^6.4"
+        "matomo/device-detector": "^6.4",
+        "endroid/qr-code": "^6.1"
     },
     "config": {
         "allow-plugins": {
