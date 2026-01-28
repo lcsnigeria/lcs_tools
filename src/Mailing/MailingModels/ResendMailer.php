@@ -10,7 +10,7 @@ use MailingConfigs;
  * Class ResendMailer
  *
  * Implements the Resend mailing model for sending emails via the Resend API.
- * Compatible with the LCS_Mail interface.
+ * Compatible with the LCS_Mailer interface.
  */
 class ResendMailer extends MailingConfigs
 {

@@ -20,7 +20,7 @@ use SymfonyMailer;
 use Mailgun;
 
 /**
- * Class LCS_Mail
+ * Class LCS_Mailer
  *
  * A flexible utility class for sending emails using either Symfony Mailer or PHPMailer.
  *
@@ -40,7 +40,7 @@ use Mailgun;
  * Usage example:
  * ```php
  * // 1) Instantiate with SMTP credentials and desired backend:
- * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'secret', 587, 'tls', 'phpmailer');
+ * $mailer = new LCS_Mailer('smtp.example.com', 'user@example.com', 'secret', 587, 'tls', 'phpmailer');
  *
  * // 2) Send a simple message:
  * $sent = $mailer->send(
@@ -70,10 +70,10 @@ use Mailgun;
  * );
  * ```
  */
-class LCS_Mail extends MailingConfigs 
+class LCS_Mailer extends MailingConfigs 
 {
     /**
-     * LCS_Mail constructor.
+     * LCS_Mailer constructor.
      *
      * Initializes the mailer with the specified SMTP configuration.
      *
@@ -132,7 +132,7 @@ class LCS_Mail extends MailingConfigs
      * Usage Example:
      * 
      * ```php
-     * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'password');
+     * $mailer = new LCS_Mailer('smtp.example.com', 'user@example.com', 'password');
      * $mailer->setPort(465); // set to port 465 using SMTPS encryption
      * ```
      */
@@ -226,7 +226,7 @@ class LCS_Mail extends MailingConfigs
      * ### Usage Examples
      * ```php
      * // Basic usage (default sender/reply-to, no attachments)
-     * $mailer = new LCS_Mail('smtp.example.com', 'user@example.com', 'secret', 587, 'tls', 'phpmailer');
+     * $mailer = new LCS_Mailer('smtp.example.com', 'user@example.com', 'secret', 587, 'tls', 'phpmailer');
      * $mailer->send(
      *     'recipient@example.com:Recipient Name',
      *     'Welcome!',

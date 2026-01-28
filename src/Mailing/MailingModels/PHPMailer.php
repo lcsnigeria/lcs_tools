@@ -13,7 +13,7 @@ use LCSNG\Tools\Mailing\MailingValidations;
 class PHPMailer extends MailingConfigs
 {
     /**
-     * LCS_Mail constructor.
+     * PHPMailer constructor.
      *
      * Initializes the mailer with the specified SMTP configuration.
      *
@@ -73,7 +73,7 @@ class PHPMailer extends MailingConfigs
      * 
      * ```php
      * // Simple usage
-     * $mailer = new LCS_Mail();
+     * $mailer = new PHPMailer();
      * $mailer->send('recipient@example.com', 'Test Subject', '<p>This is a test email.</p>');
      * 
      * // Usage with name in recipient and custom headers

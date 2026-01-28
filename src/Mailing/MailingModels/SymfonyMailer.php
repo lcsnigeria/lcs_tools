@@ -19,7 +19,7 @@ use Symfony\Component\Mime\Address;
 class SymfonyMailer extends MailingConfigs 
 {
     /**
-     * LCS_Mail constructor.
+     * SymfonyMailer constructor.
      *
      * Initializes the mailer with the specified SMTP configuration.
      *
