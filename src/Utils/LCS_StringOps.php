@@ -432,6 +432,25 @@ class LCS_StringOps {
     }
 
     /**
+     * Convert binary IP to string for API output.
+     *
+     * @param string|null $binaryIp
+     * @return string|null
+     *
+     * @example
+     * $user['last_login_ip'] = convertIpBinaryToString($user['last_login_ip']);
+     */
+    public static function convertIpBinaryToString(?string $binaryIp): ?string
+    {
+        if ($binaryIp === null || $binaryIp === '') {
+            return null;
+        }
+
+        $ip = @inet_ntop($binaryIp);
+        return $ip !== false ? $ip : null;
+    }
+
+    /**
      * Extracts metadata from a multi-line comment block.
      *
      * This function parses a multi-line comment block (C-style: `/* ... * /`) and extracts
