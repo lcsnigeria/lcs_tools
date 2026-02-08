@@ -236,8 +236,10 @@ class LCS_FileManager {
      *
      * @param int|null $time_limit Optional. Custom execution time limit in seconds.
      *                             If not provided, the `$time_limit` property will be used.
+     * 
+     * @param bool|null $clear_output_buffer Optional. Whether to clear the output buffer.
      */
-    public function __construct(?int $time_limit = null)
+    public function __construct(?int $time_limit = null, ?bool $clear_output_buffer = true)
     {
         // Store the current max execution time
         $this->previous_time_limit = empty(ini_get('max_execution_time')) ? 300 : ini_get('max_execution_time');
@@ -250,9 +252,20 @@ class LCS_FileManager {
         // Temporarily set the execution time to the user-defined limit or no limit (0)
         set_time_limit($this->time_limit);
 
-        // Clear any existing output buffers to avoid corrupting the output
-        while (ob_get_level()) {
-            ob_end_clean();
+        if ($clear_output_buffer) {
+            /**
+             * Clears all active output buffers to prevent data corruption during file operations.
+             * 
+             * This is essential before handling file downloads or streaming operations, as any
+             * buffered output (from echo statements, headers, or errors) could be prepended to
+             * the file content, corrupting the output. The loop ensures all nested output buffers
+             * are emptied and closed, leaving a clean output stream for the subsequent file operation.
+             * 
+             * @return void
+             */
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
         }
     }
 
@@ -1672,6 +1685,22 @@ class LCS_FileManager {
         $this->file_limit = 10;
         $this->time_limit = 0;
         $this->rename = true;
+    }
+
+    /**
+     * Clears all active output buffers to prevent data corruption during file operations.
+     * 
+     * This is essential before handling file downloads or streaming operations, as any
+     * buffered output (from echo statements, headers, or errors) could be prepended to
+     * the file content, corrupting the output. The loop ensures all nested output buffers
+     * are emptied and closed, leaving a clean output stream for the subsequent file operation.
+     * 
+     * @return void
+     */
+    public function clearOutputBuffers() {
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
     }
 
     /**

@@ -77,7 +77,10 @@ trait LCS_UserDevice
         }
 
         $device_string = trim("{$brand} {$model}") ?: 'Unknown Device';
-
+        $os_name = $os['name'] ?? ($ch_platform ?? 'Unknown OS');
+        $os_version = $os['version'] ?? '';
+        $client_name = $client['name'] ?? 'Unknown Browser';
+        $client_version = $client['version'] ?? '';
         return [
             'is_bot'          => false,
             'device_type'     => $device ?? 'Unknown',
@@ -85,9 +88,9 @@ trait LCS_UserDevice
             'model'           => $model ?? 'Unknown',
             'os_name'         => $os['name'] ?? ($ch_platform ?? 'Unknown'),
             'os_version'      => $os['version'] ?? '',
-            'browser_name'    => $client['name'] ?? 'Unknown',
-            'browser_version' => $client['version'] ?? '',
-            'device_info'     => "{$device_string} ({$os['name']} {$os['version']}) - {$client['name']} {$client['version']} [{$device}]"
+            'browser_name'    => $client_name,
+            'browser_version' => $client_version,
+            'device_info'     => "{$device_string} ({$os_name} {$os_version}) - {$client_name} {$client_version} [{$device}]"
         ];
     }
 

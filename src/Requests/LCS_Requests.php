@@ -186,7 +186,11 @@ class LCS_Requests
 
                 // Check if JSON decoding was successful
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    $requestData = array_merge($requestData, $postData);
+                    $requestData = is_array($postData) 
+                    ? array_merge($requestData, $postData) 
+                    : array_merge($requestData, [
+                        'string_data' => $postData
+                    ]);
                 } else {
                     return false; // Invalid JSON
                 }
