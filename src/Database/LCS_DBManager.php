@@ -550,10 +550,11 @@ class LCS_DBManager
      *
      * @param string $sql The SQL query string.
      * @param mixed ...$values Values to the placeholder in the $sql.
-     * @return array|object|false Query results as an array, or false on failure.
+     * 
+     * @return array|false An array of results, or false on failure.
      */
-    public function get_results($sql, ...$values) {
-        
+    public function get_results($sql, ...$values): array|false 
+    {
         try {
             $sql = $this->validate_sql($sql, $values);
             // Direct SQL Execution (prepare not needed)
@@ -565,7 +566,6 @@ class LCS_DBManager
             $specifiers = $this->build_specifiers($values);
             $dataValues = $this->flatten_array($values);
             return $this->fetch_all($sql, true, $dataValues, $specifiers);
-
         } catch (\Exception $e) {
             $this->reportError($e->getMessage());
             return []; // Allows calling code to handle errors
@@ -607,10 +607,12 @@ class LCS_DBManager
      * @param string $table The name of the table.
      * @param array $data Associative array of column-value pairs to update.
      * @param array $where Associative array of conditions for the WHERE clause.
-     * @return void
+     * 
+     * @return array|false The results of the update query, or false on failure.
      * @throws Exception If the table name, data, or where conditions are invalid.
      */
-    public function update($table, $data, $where) {
+    public function update($table, $data, $where) : array|false
+    {
         // Validate inputs
         if (empty($table) || !is_string($table)) {
             $this->reportError("Invalid table name provided for update.");
@@ -628,7 +630,7 @@ class LCS_DBManager
         $sql = "UPDATE `$table` SET $set WHERE $conditions";
 
         // Execute the query
-        $this->get_results($sql, array_merge(array_values($data), array_values($where)));
+        return $this->get_results($sql, array_merge(array_values($data), array_values($where)));
     }
 
     /**
@@ -935,14 +937,21 @@ class LCS_DBManager
 
     /**
      * Fetches all rows from a query result.
+     * 
+     * This method handles both prepared statements and 
+     * direct SQL execution, and it dynamically adapts to 
+     * the configured fetch mode (object or associative array).
      *
      * @param string $sql The SQL query string.
      * @param bool $prepare Whether to use prepared statements.
      * @param array|null $values Values to bind in prepared statements.
      * @param string|null $specifiers Type specifiers for MySQLi bind_param.
-     * @return array The fetched rows as an array.
+     * 
+     * @return array An array of results, where each result is an object or 
+     * associative array based on the fetch mode.
      */
-    private function fetch_all($sql, $prepare = true, $values = null, $specifiers = null): array {
+    private function fetch_all($sql, $prepare = true, $values = null, $specifiers = null): array 
+    {
         // Refresh fetch mode
         $this->refresh_fetch_mode();
 
