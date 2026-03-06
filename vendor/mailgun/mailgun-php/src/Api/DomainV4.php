@@ -34,7 +34,7 @@ use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
- * @see https://documentation.mailgun.com/en/latest/api-domains.html
+ * @see https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/domains
  */
 class DomainV4 extends HttpApi
 {
@@ -42,20 +42,40 @@ class DomainV4 extends HttpApi
 
     /**
      * Returns a list of domains on the account.
-     * @param  int                      $limit
-     * @param  int                      $skip
-     * @param  array                    $requestHeaders
+     * @link https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/domains/get-v4-domains#domains/get-v4-domains/request
+     * @param array $params
+     * @param array $requestHeaders
      * @return IndexResponse|array
      * @throws ClientExceptionInterface
      */
-    public function index(int $limit = 100, int $skip = 0, array $requestHeaders = [])
+    public function index(array $params = [], array $requestHeaders = [])
     {
-        Assert::range($limit, 1, 1000);
+        $params = array_merge([
+            'limit' => 100,
+            'skip' => 0,
+        ], $params);
 
-        $params = [
-            'limit' => $limit,
-            'skip' => $skip,
-        ];
+        if (isset($params['limit'])) {
+            Assert::range($params['limit'], 1, 1000, 'Limit must be between 1 and 1000');
+        }
+
+        if (isset($params['skip'])) {
+            Assert::greaterThanEq($params['skip'], 0, 'Skip must be non-negative');
+        }
+
+        if (isset($params['state'])) {
+            Assert::oneOf($params['state'], ['active', 'unverified', 'disabled'],
+                'State must be one of: active, unverified, disabled');
+        }
+
+        if (isset($params['sort'])) {
+            Assert::oneOf($params['sort'], ['name', 'name:asc', 'name:desc'],
+                'Sort must be one of: name, name:asc, name:desc');
+        }
+
+        $params = array_filter($params, function ($value) {
+            return !is_null($value) && $value !== '';
+        });
 
         $response = $this->httpGet('/v4/domains', $params, $requestHeaders);
 
@@ -81,8 +101,7 @@ class DomainV4 extends HttpApi
     /**
      * Creates a new domain for the account.
      * See below for spam filtering parameter information.
-     * {@link https://documentation.mailgun.com/en/latest/user_manual.html#um-spam-filter}.
-     * @see    https://documentation.mailgun.com/en/latest/api-domains.html#domains
+     * @see    https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/domains/post-v4-domains
      * @param string $domain name of the domain
      * @param string|null $smtpPass password for SMTP authentication
      * @param string|null $spamAction `disable` or `tag` - inbound spam filtering
@@ -350,8 +369,7 @@ class DomainV4 extends HttpApi
     /**
      * Update webScheme for existing domain
      * See below for spam filtering parameter information.
-     * {@link https://documentation.mailgun.com/en/latest/user_manual.html#um-spam-filter}.
-     * @see https://documentation.mailgun.com/en/latest/api-domains.html#domains
+     * @see https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/domains/put-v4-domains--name-
      * @param  string                                    $domain         name of the domain
      * @param  string                                    $webScheme      `http` or `https` - set your open, click and unsubscribe URLs to use http or https. The default is http
      * @param  array                                     $requestHeaders
