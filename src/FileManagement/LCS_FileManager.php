@@ -317,9 +317,7 @@ class LCS_FileManager {
         $allMimeTypes = LCS_FileComponents::allFileMimeTypes();
 
         if (!empty($this->file_types)) {
-            $providedFileTypes = is_string($this->file_types) || !is_array($this->file_types) 
-                ? (array) $this->file_types 
-                : $this->file_types;
+            $providedFileTypes = $this->normalizeFileTypes($this->file_types);
 
             // Check if any provided file types are not in the list of all MIME types
             $invalidFileTypes = array_diff($providedFileTypes, $allMimeTypes);
@@ -1716,6 +1714,40 @@ class LCS_FileManager {
     {
         // Revert to the previous time limit
         set_time_limit($this->previous_time_limit);
+    }
+
+    /**
+     * Normalize provided file types into a clean array of strings.
+     *
+     * - Accepts comma-separated string or array.
+     * - Trims whitespace.
+     * - Removes empty values.
+     * - Re-indexes the array.
+     *
+     * @param string|array|null $fileTypes
+     * @return array
+     *
+     * @example
+     * $types = $this->normalizeFileTypes('jpg, png , gif');
+     * // ['jpg', 'png', 'gif']
+     *
+     * $types = $this->normalizeFileTypes(['jpg', ' png ', '', 'gif']);
+     * // ['jpg', 'png', 'gif']
+     */
+    private function normalizeFileTypes(string|array|null $fileTypes): array
+    {
+        if (empty($fileTypes)) {
+            return [];
+        }
+
+        $types = is_string($fileTypes)
+            ? explode(',', $fileTypes)
+            : (array) $fileTypes;
+
+        $types = array_map('trim', $types);
+        $types = array_filter($types, static fn($v) => $v !== '');
+
+        return array_values($types);
     }
 
 }

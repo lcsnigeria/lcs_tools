@@ -344,7 +344,14 @@ class LCS_FileComponents
 
                 'audio/midi',
                 'audio/x-midi',
-                'audio/webm',
+                'audio/mpeg',   // .mp3
+                'audio/mp4',    // .m4a / AAC in MP4 container
+                'audio/ogg',    // .ogg
+                'audio/wav',    // .wav
+                'audio/webm',   // .weba
+                'audio/flac',   // .flac
+                'audio/aac',    // raw AAC
+                'audio/x-m4a',  // .m4a (alternate MIME)
 
 
                 'font/otf',
@@ -388,7 +395,13 @@ class LCS_FileComponents
                 'video/x-flv',
                 'video/mp2t', // For .ts (MPEG transport stream)
                 'video/x-ms-wmv',
-
+                'video/mp4',        // .mp4
+                'video/quicktime',  // .mov
+                'video/x-msvideo',  // .avi
+                'video/webm',       // .webm
+                'video/x-matroska', // .mkv
+                'video/3gpp',       // .3gp
+                
 
                 'audio/mpeg', // For .mp3
                 'audio/ogg', // For .oga
