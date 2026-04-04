@@ -1,32 +1,41 @@
 <?php
 namespace LCSNG\Tools\AI;
 
-use LCSNG\Tools\Requests\LCS_Requests;
-
 /**
  * Class LCS_AIManager
  *
  * Central manager for all AI provider interactions within the LCS ecosystem.
- * Supports OpenAI, Google, Anthropic, and Microsoft Azure OpenAI providers.
+ * Supports OpenAI, Google (Gemini/Imagen/Veo), Anthropic (Claude), and
+ * Microsoft Azure OpenAI.
  *
- * This class acts as a unified interface for:
- *  - Text/content generation  (generateContent)
- *  - Image generation          (generateImage)
- *  - Audio generation/TTS      (generateAudio)
- *  - Video generation          (generateVideo)
+ * Self-contained — owns its own HTTP transport layer (sendRequest) and carries
+ * zero runtime dependencies on any other LCS class.
  *
- * Provider-specific request payloads, headers, and response normalisation are
- * handled internally so callers can switch providers without changing their code.
+ * Capabilities:
+ *  - Text / content generation  → generateContent()
+ *  - Image generation           → generateImage()
+ *  - Audio / TTS generation     → generateAudio()
+ *  - Video generation           → generateVideo()  +  pollVideoJob()
  *
- * Usage example:
+ * Quick start:
  * ```php
- * $ai = new LCS_AIManager('sk-...', '2023-06-01');   // Anthropic needs apiVersion
+ * // OpenAI (default)
+ * $ai = new LCS_AIManager(getenv('OPENAI_API_KEY'));
+ * echo $ai->ask('What is the capital of Nigeria?');
+ * // "The capital of Nigeria is Abuja."
+ *
+ * // Anthropic
+ * $ai = new LCS_AIManager(getenv('ANTHROPIC_API_KEY'), '2023-06-01');
  * $ai->setProvider('anthropic');
  * $ai->setModel('claude-sonnet-4-6');
- * $ai->setSystemPrompt('You are a helpful assistant.');
- * $ai->setPrompt('Explain photosynthesis in simple terms.');
+ * $result = $ai->generateContent('Explain recursion in two sentences.');
+ * echo $result['text'];
  *
- * $result = $ai->generateContent();
+ * // Google Gemini
+ * $ai = new LCS_AIManager(getenv('GOOGLE_API_KEY'));
+ * $ai->setProvider('google');
+ * $ai->setModel('gemini-2.5-pro');
+ * $result = $ai->generateContent('List three benefits of PHP 8.');
  * echo $result['text'];
  * ```
  *
@@ -36,41 +45,48 @@ final class LCS_AIManager
 {
     use LLM_Configs;
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Public state properties
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
-    /** @var string|null Active AI provider (openai | google | anthropic | microsoft) */
+    /** @var string|null Active AI provider: openai | google | anthropic | microsoft */
     public ?string $provider = null;
 
     /** @var string|null Active model identifier */
     public ?string $model = null;
 
-    /** @var string|null The user prompt / instruction to send to the model */
+    /** @var string|null User prompt for the next generation call */
     public ?string $prompt = null;
 
-    /** @var string|null An optional system-level prompt (supported by most providers) */
+    /**
+     * System-level instruction sent before conversation history and user prompt.
+     * Mapped to the correct provider field internally:
+     *  - OpenAI / Azure  → messages[0] role 'system'
+     *  - Anthropic        → top-level 'system' key
+     *  - Google           → 'systemInstruction' key
+     *
+     * @var string|null
+     */
     public ?string $systemPrompt = null;
 
     /**
      * Model state filter: 'stable' | 'preview' | 'deprecated' | 'all'
-     *
-     * Used when auto-selecting or validating models by state.
+     * Used when listing or auto-selecting models.
      *
      * @var string|null
      */
     public ?string $modelState = null;
 
-    /** @var int|null Numeric model group key (maps to MODEL_GROUPS in LLM_Configs) */
+    /** @var int|null Numeric model group key (see LLM_Configs::MODEL_GROUPS) */
     public ?int $modelGroup = null;
 
-    // -------------------------------------------------------------------------
-    // Generation parameter properties
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Generation parameters
+    // =========================================================================
 
     /**
-     * Maximum number of tokens the model may generate in a single response.
-     * Defaults to 1024. Set to null to use the provider's own default.
+     * Maximum tokens the model may generate.
+     * Defaults to 1024. Null defers to the provider default.
      *
      * @var int|null
      */
@@ -78,8 +94,8 @@ final class LCS_AIManager
 
     /**
      * Sampling temperature (0.0 – 2.0).
-     * Higher values produce more creative/random output; lower values are more
-     * deterministic. Set to null to use the provider default.
+     * Low = deterministic/factual. High = creative/varied.
+     * Null defers to the provider default.
      *
      * @var float|null
      */
@@ -87,15 +103,16 @@ final class LCS_AIManager
 
     /**
      * Top-P nucleus sampling (0.0 – 1.0).
-     * An alternative to temperature. Set to null to use the provider default.
+     * Alternative to temperature — use one, not both.
+     * Null defers to the provider default.
      *
      * @var float|null
      */
     public ?float $topP = null;
 
     /**
-     * Number of completions to generate for each request.
-     * Most providers support 1–10. Defaults to 1.
+     * Number of independent completions per request (1 – 10).
+     * Results appear in the 'texts' response key.
      *
      * @var int
      */
@@ -104,61 +121,47 @@ final class LCS_AIManager
     /**
      * Conversation history for multi-turn sessions.
      *
-     * Each element must follow the shape:
-     * ```
-     * ['role' => 'user'|'assistant'|'system', 'content' => '...']
-     * ```
-     * Build this array before calling generateContent() to maintain context
-     * across multiple turns.
+     * Shape: [['role' => 'user'|'assistant'|'system', 'content' => '...'], ...]
+     *
+     * Use chat() to let the class manage this automatically, or manage it
+     * manually with addMessage() / setConversationHistory().
      *
      * @var array<int, array{role: string, content: string}>
      */
     public array $conversationHistory = [];
 
-    // -------------------------------------------------------------------------
-    // Private/protected credentials & internals
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Private credentials
+    // =========================================================================
 
-    /** @var string|null API key for the selected provider */
+    /** @var string|null API key for the active provider */
     private ?string $apiKey = null;
 
     /**
      * API version string.
-     *
-     * - Anthropic: required header value, e.g. '2023-06-01'
-     * - OpenAI / Google: used in endpoint URL substitution where applicable
+     *  - Anthropic: sent as 'anthropic-version' header (e.g. '2023-06-01')
+     *  - OpenAI / Google: substituted into the endpoint URL where applicable
      *
      * @var string|null
      */
     private ?string $apiVersion = null;
 
-    /**
-     * Optional Microsoft Azure deployment name.
-     * Only used when provider is 'microsoft'.
-     *
-     * @var string|null
-     */
+    /** @var string|null Azure deployment name (microsoft provider only) */
     private ?string $azureDeploymentName = null;
 
-    /**
-     * Optional Microsoft Azure resource name (subdomain).
-     * Only used when provider is 'microsoft'.
-     *
-     * @var string|null
-     */
+    /** @var string|null Azure resource subdomain (microsoft provider only) */
     private ?string $azureResourceName = null;
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Constructor
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     /**
-     * Construct a new LCS_AIManager instance.
+     * Create a new LCS_AIManager instance.
      *
-     * @param string      $apiKey     API key for the chosen AI provider.
-     * @param string|null $apiVersion Optional API version string.
+     * @param string      $apiKey     API key for the chosen provider.
+     * @param string|null $apiVersion Optional API version.
      *                                Required for Anthropic (e.g. '2023-06-01').
-     *                                Used in endpoint URL substitution for Google.
      */
     public function __construct(string $apiKey, ?string $apiVersion = null)
     {
@@ -172,14 +175,13 @@ final class LCS_AIManager
     }
 
     // =========================================================================
-    // Setter / configuration methods
+    // Setters — provider & model
     // =========================================================================
 
     /**
      * Set the active AI provider.
      *
-     * Also resets the active model to the first model in the new provider's
-     * default group so the instance remains in a valid state.
+     * Resets the model to the first entry in the new provider's default group.
      *
      * @param string $provider One of the values in LLM_Configs::PROVIDERS.
      *
@@ -189,17 +191,16 @@ final class LCS_AIManager
     {
         if (!in_array($provider, self::PROVIDERS, true)) {
             throw new \InvalidArgumentException(
-                "Unsupported provider: '$provider'. Supported providers: " . implode(', ', self::PROVIDERS)
+                "Unsupported provider: '$provider'. Supported: " . implode(', ', self::PROVIDERS)
             );
         }
 
         $this->provider = $provider;
 
-        // Reset to first model in the default group for the new provider
-        $groupModels = self::MODELS[$provider][
-            self::MODEL_GROUPS[$provider][self::DEFAULT_MODEL_GROUP] ?? array_key_first(self::MODEL_GROUPS[$provider])
-        ] ?? [];
+        $defaultGroupName = self::MODEL_GROUPS[$provider][self::DEFAULT_MODEL_GROUP]
+            ?? array_key_first(self::MODEL_GROUPS[$provider]);
 
+        $groupModels      = self::MODELS[$provider][$defaultGroupName] ?? [];
         $this->model      = $groupModels[0] ?? null;
         $this->modelGroup = self::DEFAULT_MODEL_GROUP;
     }
@@ -207,12 +208,12 @@ final class LCS_AIManager
     /**
      * Set the active model.
      *
-     * Validates that the model belongs to the current provider (across all
-     * state lists) before accepting it.
+     * Validates against every state list for the current provider so any known
+     * model string (stable, preview, or deprecated) is accepted.
      *
-     * @param string $model A model identifier listed under the current provider.
+     * @param string $model A model identifier from the current provider's catalogue.
      *
-     * @throws \InvalidArgumentException If the model is not valid for the current provider.
+     * @throws \InvalidArgumentException If the model is not recognised.
      */
     public function setModel(string $model): void
     {
@@ -232,13 +233,13 @@ final class LCS_AIManager
      *
      * @param string $modelState One of: 'stable', 'preview', 'deprecated', 'all'.
      *
-     * @throws \InvalidArgumentException If the state is not recognised.
+     * @throws \InvalidArgumentException For unrecognised values.
      */
     public function setModelState(string $modelState): void
     {
         if (!in_array($modelState, self::MODEL_STATES, true)) {
             throw new \InvalidArgumentException(
-                "Unsupported model state: '$modelState'. Valid states: " . implode(', ', self::MODEL_STATES)
+                "Unsupported model state: '$modelState'. Valid: " . implode(', ', self::MODEL_STATES)
             );
         }
 
@@ -248,13 +249,11 @@ final class LCS_AIManager
     /**
      * Set the active model group.
      *
-     * The group must exist in MODEL_GROUPS for the current provider.  When a
-     * new group is set the active model is automatically switched to the first
-     * model in that group.
+     * The model is auto-switched to the first entry in the new group.
      *
-     * @param int $modelGroup A numeric key from MODEL_GROUPS for the current provider.
+     * @param int $modelGroup Numeric key from MODEL_GROUPS for the current provider.
      *
-     * @throws \InvalidArgumentException If the group key is not valid for the current provider.
+     * @throws \InvalidArgumentException If the key does not exist.
      */
     public function setModelGroup(int $modelGroup): void
     {
@@ -268,16 +267,19 @@ final class LCS_AIManager
 
         $this->modelGroup = $modelGroup;
 
-        // Auto-switch model to the first entry in the new group
         $groupName   = self::MODEL_GROUPS[$this->provider][$modelGroup];
         $groupModels = self::MODELS[$this->provider][$groupName] ?? [];
         $this->model = $groupModels[0] ?? $this->model;
     }
 
+    // =========================================================================
+    // Setters — prompts
+    // =========================================================================
+
     /**
-     * Set the user prompt.
+     * Set the user prompt used when generateContent() is called with no argument.
      *
-     * @param string $prompt The instruction or question to send to the model.
+     * @param string $prompt The instruction or question to send.
      */
     public function setPrompt(string $prompt): void
     {
@@ -285,90 +287,84 @@ final class LCS_AIManager
     }
 
     /**
-     * Set a system-level prompt.
+     * Set the system-level instruction.
      *
-     * The system prompt is sent before the conversation history and the user
-     * prompt. It is used to give the model a persona, context, or constraints.
-     *
-     * @param string $systemPrompt High-level instruction for the model's behaviour.
+     * @param string $systemPrompt High-level behavioural instruction for the model.
      */
     public function setSystemPrompt(string $systemPrompt): void
     {
         $this->systemPrompt = $systemPrompt;
     }
 
+    // =========================================================================
+    // Setters — generation parameters
+    // =========================================================================
+
     /**
-     * Set the maximum number of tokens to generate.
+     * Set the maximum tokens to generate.
      *
-     * @param int $maxTokens Positive integer; provider-specific upper limits apply.
+     * @param int $maxTokens Positive integer; provider model caps apply.
      *
-     * @throws \InvalidArgumentException If the value is less than 1.
+     * @throws \InvalidArgumentException If less than 1.
      */
     public function setMaxTokens(int $maxTokens): void
     {
         if ($maxTokens < 1) {
             throw new \InvalidArgumentException('maxTokens must be at least 1.');
         }
-
         $this->maxTokens = $maxTokens;
     }
 
     /**
-     * Set the sampling temperature.
+     * Set the sampling temperature (0.0 – 2.0).
      *
-     * @param float $temperature Value between 0.0 and 2.0.
-     *
-     * @throws \InvalidArgumentException If out of the 0.0 – 2.0 range.
+     * @throws \InvalidArgumentException If outside 0.0 – 2.0.
      */
     public function setTemperature(float $temperature): void
     {
         if ($temperature < 0.0 || $temperature > 2.0) {
             throw new \InvalidArgumentException('Temperature must be between 0.0 and 2.0.');
         }
-
         $this->temperature = $temperature;
     }
 
     /**
-     * Set the top-P nucleus sampling parameter.
+     * Set the top-P nucleus sampling value (0.0 – 1.0).
      *
-     * @param float $topP Value between 0.0 and 1.0.
-     *
-     * @throws \InvalidArgumentException If out of the 0.0 – 1.0 range.
+     * @throws \InvalidArgumentException If outside 0.0 – 1.0.
      */
     public function setTopP(float $topP): void
     {
         if ($topP < 0.0 || $topP > 1.0) {
             throw new \InvalidArgumentException('topP must be between 0.0 and 1.0.');
         }
-
         $this->topP = $topP;
     }
 
     /**
-     * Set the number of completions to generate per request.
+     * Set the number of completions to generate per request (1 – 10).
      *
-     * @param int $n Between 1 and 10.
-     *
-     * @throws \InvalidArgumentException If out of the 1 – 10 range.
+     * @throws \InvalidArgumentException If outside 1 – 10.
      */
     public function setN(int $n): void
     {
         if ($n < 1 || $n > 10) {
             throw new \InvalidArgumentException('n must be between 1 and 10.');
         }
-
         $this->n = $n;
     }
 
     /**
-     * Configure Microsoft Azure-specific credentials.
+     * Configure Microsoft Azure OpenAI credentials.
      *
-     * Must be called before any request when provider is 'microsoft'.
+     * Must be called before any generation when provider is 'microsoft'.
      *
-     * @param string $resourceName   The Azure resource name (subdomain part of the host).
-     * @param string $deploymentName The Azure deployment name.
-     * @param string $apiVersion     The Azure OpenAI API version (e.g. '2024-02-01').
+     * Endpoint constructed as:
+     * https://{resource}.openai.azure.com/openai/deployments/{deployment}/chat/completions?api-version={version}
+     *
+     * @param string $resourceName   Azure resource subdomain.
+     * @param string $deploymentName Azure portal deployment name.
+     * @param string $apiVersion     API version string, e.g. '2024-02-01'.
      */
     public function setAzureConfig(string $resourceName, string $deploymentName, string $apiVersion): void
     {
@@ -377,17 +373,23 @@ final class LCS_AIManager
         $this->apiVersion          = $apiVersion;
     }
 
+    // =========================================================================
+    // Conversation management
+    // =========================================================================
+
+    /**
+     * Append a message to the conversation history.
+     *
+     * @param string $role    'user' | 'assistant' | 'system'
+     * @param string $content Message text.
+     */
+    public function addMessage(string $role, string $content): void
+    {
+        $this->conversationHistory[] = ['role' => $role, 'content' => $content];
+    }
+
     /**
      * Replace the entire conversation history.
-     *
-     * Each message must be an associative array with at least 'role' and
-     * 'content' keys:
-     * ```php
-     * [
-     *   ['role' => 'user',      'content' => 'Hello!'],
-     *   ['role' => 'assistant', 'content' => 'Hi there!'],
-     * ]
-     * ```
      *
      * @param array<int, array{role: string, content: string}> $history
      */
@@ -397,20 +399,7 @@ final class LCS_AIManager
     }
 
     /**
-     * Append a single message to the conversation history.
-     *
-     * @param string $role    'user' | 'assistant' | 'system'
-     * @param string $content The message text.
-     */
-    public function addMessage(string $role, string $content): void
-    {
-        $this->conversationHistory[] = ['role' => $role, 'content' => $content];
-    }
-
-    /**
-     * Clear the conversation history.
-     *
-     * Call this to start a new, unrelated conversation on the same instance.
+     * Clear all conversation history to start a fresh thread.
      */
     public function clearConversationHistory(): void
     {
@@ -418,31 +407,221 @@ final class LCS_AIManager
     }
 
     // =========================================================================
-    // Endpoint resolution
+    // Private — HTTP transport (self-contained, zero external dependencies)
     // =========================================================================
 
     /**
-     * Resolve the API endpoint URL for the current provider, version and model.
+     * Send an HTTP request via cURL and return a normalised result array.
      *
-     * Replaces the {{VERSION}} and {{MODEL}} placeholders defined in
-     * LLM_Configs::API_ENDPOINTS with the actual runtime values.
+     * Faithful port of LCS_Requests::send_curl() — same option keys, same
+     * return shape — kept private so LCS_AIManager has no runtime dependencies.
      *
-     * For Microsoft Azure the endpoint is constructed dynamically from the
-     * resource name, deployment name, and API version set via setAzureConfig().
+     * Option keys (UPPERCASE preferred; lowercase aliases accepted):
+     *  METHOD          GET | POST | PUT | PATCH | DELETE  (auto-detected if omitted)
+     *  HEADERS         string[]  Additional header strings
+     *  TIMEOUT         int       Total timeout in seconds   (default 30)
+     *  CONNECT_TIMEOUT int       Connect timeout in seconds (default 10)
+     *  CURL            array     Raw CURLOPT_* => value overrides
      *
-     * @return string The fully-formed endpoint URL ready for use in an HTTP request.
+     * Return shape:
+     * ```
+     * [
+     *   'success'    => bool,
+     *   'http_code'  => int,
+     *   'headers'    => array<string, string>,
+     *   'body'       => string,
+     *   'json'       => array|null,
+     *   'error'      => string|null,
+     *   'curl_errno' => int|null,
+     * ]
+     * ```
      *
-     * @throws \RuntimeException If no endpoint is configured for the current provider,
-     *                           or if required Azure config is missing.
+     * @param string            $url
+     * @param array|string|null $data    Body data. Arrays are JSON-encoded automatically.
+     * @param array             $options
+     *
+     * @return array<string, mixed>
+     */
+    private function sendRequest(string $url, array|string|null $data = null, array $options = []): array
+    {
+        $method         = strtoupper((string)(
+            $options['METHOD'] ?? $options['method'] ?? ($data === null ? 'GET' : 'POST')
+        ));
+        $timeout        = (int)($options['TIMEOUT']         ?? $options['timeout']         ?? 30);
+        $connectTimeout = (int)($options['CONNECT_TIMEOUT'] ?? $options['connect_timeout'] ?? 10);
+        $userHeaders    =       $options['HEADERS']         ?? $options['headers']         ?? [];
+        $extraCurl      =       $options['CURL']            ?? $options['curl']            ?? [];
+
+        // Build body / append query string
+        $body = '';
+
+        if (in_array($method, ['GET', 'DELETE'], true) && !empty($data) && is_array($data)) {
+            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($data);
+
+        } elseif (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+            if (is_array($data)) {
+                $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            } elseif (is_string($data) && $data !== '') {
+                $body = $data;
+            }
+        }
+
+        // Headers: Content-Type added only when there is a body; user headers win
+        $defaultHeaders = ['Accept: application/json'];
+        if ($body !== '') {
+            $defaultHeaders[] = 'Content-Type: application/json';
+        }
+
+        $merged = $this->mergeRequestHeaders($defaultHeaders, $userHeaders);
+
+        // cURL options
+        $curlOpts = [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER         => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_POSTREDIR      => CURL_REDIR_POST_ALL,
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER     => $merged,
+        ];
+
+        switch ($method) {
+            case 'GET':
+                $curlOpts[CURLOPT_HTTPGET] = true;
+                break;
+
+            case 'POST':
+                $curlOpts[CURLOPT_POST] = true;
+                if ($body !== '') {
+                    $curlOpts[CURLOPT_POSTFIELDS] = $body;
+                }
+                break;
+
+            default:
+                $curlOpts[CURLOPT_CUSTOMREQUEST] = $method;
+                if ($body !== '') {
+                    $curlOpts[CURLOPT_POSTFIELDS] = $body;
+                }
+        }
+
+        foreach ($extraCurl as $k => $v) {
+            $curlOpts[(int)$k] = $v;
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, $curlOpts);
+
+        $raw        = curl_exec($ch);
+        $curlErrNo  = curl_errno($ch);
+        $curlErr    = $curlErrNo ? curl_error($ch) : null;
+        $httpCode   = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+
+        if ($curlErrNo) {
+            return [
+                'success'    => false,
+                'http_code'  => $httpCode,
+                'headers'    => [],
+                'body'       => '',
+                'json'       => null,
+                'error'      => $curlErr,
+                'curl_errno' => $curlErrNo,
+            ];
+        }
+
+        $rawHeaders = substr($raw, 0, $headerSize);
+        $bodyRaw    = substr($raw, $headerSize);
+
+        $decoded = json_decode($bodyRaw, true);
+        $json    = (json_last_error() === JSON_ERROR_NONE) ? $decoded : null;
+
+        return [
+            'success'    => true,
+            'http_code'  => $httpCode,
+            'headers'    => $this->parseResponseHeaders($rawHeaders),
+            'body'       => $bodyRaw,
+            'json'       => $json,
+            'error'      => null,
+            'curl_errno' => null,
+        ];
+    }
+
+    /**
+     * Merge two header arrays; user headers win on name collision (case-insensitive).
+     *
+     * @param string[] $defaults
+     * @param string[] $user
+     *
+     * @return string[]
+     */
+    private function mergeRequestHeaders(array $defaults, array $user): array
+    {
+        $map = [];
+        $key = static fn(string $h): string => strtolower(trim(explode(':', $h, 2)[0]));
+
+        foreach ($defaults as $h) { $map[$key($h)] = $h; }
+        foreach ($user    as $h) { $map[$key($h)] = $h; }
+
+        return array_values($map);
+    }
+
+    /**
+     * Parse the raw cURL header block into an associative array.
+     * Takes only the last block when a redirect chain is present.
+     *
+     * @param string $rawHeaders
+     *
+     * @return array<string, string>
+     */
+    private function parseResponseHeaders(string $rawHeaders): array
+    {
+        $headers = [];
+        $blocks  = preg_split('/\r\n\r\n/', trim($rawHeaders));
+        $last    = array_pop($blocks);
+        $lines   = preg_split('/\r\n/', $last);
+        array_shift($lines); // remove HTTP status line
+
+        foreach ($lines as $line) {
+            if (!str_contains($line, ':')) {
+                continue;
+            }
+            [$name, $value]       = explode(':', $line, 2);
+            $headers[trim($name)] = trim($value);
+        }
+
+        return $headers;
+    }
+
+    // =========================================================================
+    // Private — endpoint resolution
+    // =========================================================================
+
+    /**
+     * Resolve the fully-formed API endpoint URL for the current provider.
+     *
+     * Substitutes {{MODEL}} and {{VERSION}} placeholders from API_ENDPOINTS.
+     * For Microsoft Azure the URL is constructed from setAzureConfig() values.
+     *
+     * @return string
+     *
+     * @throws \RuntimeException If the endpoint cannot be determined.
      */
     private function getEndpoint(): string
     {
-        // Microsoft Azure: build the endpoint dynamically
         if ($this->provider === 'microsoft') {
-            if (empty($this->azureResourceName) || empty($this->azureDeploymentName) || empty($this->apiVersion)) {
+            if (
+                empty($this->azureResourceName) ||
+                empty($this->azureDeploymentName) ||
+                empty($this->apiVersion)
+            ) {
                 throw new \RuntimeException(
-                    'Microsoft Azure requires azureResourceName, azureDeploymentName, and apiVersion. ' .
-                    'Call setAzureConfig() before making a request.'
+                    'Microsoft Azure requires resourceName, deploymentName, and apiVersion. ' .
+                    'Call setAzureConfig() first.'
                 );
             }
 
@@ -454,9 +633,9 @@ final class LCS_AIManager
             );
         }
 
-        $endpoint = self::API_ENDPOINTS[$this->provider] ?? null;
+        $template = self::API_ENDPOINTS[$this->provider] ?? null;
 
-        if (empty($endpoint)) {
+        if (empty($template)) {
             throw new \RuntimeException(
                 "No API endpoint configured for provider: '{$this->provider}'"
             );
@@ -465,38 +644,34 @@ final class LCS_AIManager
         return str_replace(
             ['{{VERSION}}', '{{MODEL}}'],
             [$this->apiVersion ?? '', $this->model ?? ''],
-            $endpoint
+            $template
         );
     }
 
     // =========================================================================
-    // Header construction
+    // Private — header construction
     // =========================================================================
 
     /**
-     * Build the HTTP headers required for the current provider.
+     * Build provider-specific authentication headers.
      *
-     * Each provider has a different authentication and versioning convention:
-     * - OpenAI        → Authorization: Bearer {key}
-     * - Google        → Authorization: Bearer {key} (Vertex) or ?key={key} in URL
-     * - Anthropic     → x-api-key + anthropic-version headers
-     * - Microsoft     → api-key header
+     *  openai    → Authorization: Bearer {key}
+     *  google    → Authorization: Bearer {key}
+     *  anthropic → x-api-key: {key}  +  anthropic-version: {version}
+     *  microsoft → api-key: {key}
      *
-     * @return array<int, string> List of header strings ready for cURL.
+     * @return string[]
      */
     private function buildHeaders(): array
     {
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ];
 
         switch ($this->provider) {
             case 'openai':
-                $headers[] = 'Authorization: Bearer ' . $this->apiKey;
-                break;
-
             case 'google':
-                // Vertex AI uses OAuth bearer; Generative Language API uses a query param
-                // We support both — if an apiKey looks like an OAuth token use Bearer,
-                // otherwise it will be appended as ?key= in getEndpoint (caller's choice).
                 $headers[] = 'Authorization: Bearer ' . $this->apiKey;
                 break;
 
@@ -514,39 +689,54 @@ final class LCS_AIManager
     }
 
     // =========================================================================
-    // Payload builders (provider-specific)
+    // Private — payload builders
     // =========================================================================
 
     /**
-     * Build the request payload for content generation.
+     * Build the provider-specific JSON payload for a text generation request.
      *
-     * The payload shape differs per provider:
-     * - OpenAI / Microsoft → chat completions format  (messages array)
-     * - Anthropic           → messages API format
-     * - Google              → generateContent format   (contents array)
+     * Provider payload formats:
      *
-     * @param string $userContent The user's text input for this turn.
+     *  OpenAI / Azure (Chat Completions API — POST /v1/chat/completions)
+     *  ─────────────────────────────────────────────────────────────────
+     *  Endpoint: https://api.openai.com/v1/chat/completions
+     *  Body:     { model, messages[], n, max_tokens, temperature, top_p }
+     *  Response: { choices[{ message: { content } }], usage }
      *
-     * @return array<string, mixed> Associative payload ready for JSON encoding.
+     *  Anthropic (Messages API — POST /v1/messages)
+     *  ────────────────────────────────────────────
+     *  Body:     { model, max_tokens, messages[], system }
+     *  Response: { content[{ type, text }], usage }
+     *
+     *  Google (Generative Language API — POST /v1beta/models/{model}:generateContent)
+     *  ───────────────────────────────────────────────────────────────────────────────
+     *  Body:     { contents[], systemInstruction, generationConfig }
+     *  Response: { candidates[{ content: { parts[{ text }] } }], usageMetadata }
+     *
+     * @param string $userContent The resolved user message for this turn.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws \RuntimeException For unknown providers.
      */
     private function buildContentPayload(string $userContent): array
     {
         switch ($this->provider) {
 
             // -----------------------------------------------------------------
+            // OpenAI Chat Completions API  &  Azure OpenAI
+            // POST https://api.openai.com/v1/chat/completions
+            // -----------------------------------------------------------------
             case 'openai':
             case 'microsoft':
-            // -----------------------------------------------------------------
                 $messages = [];
 
                 if (!empty($this->systemPrompt)) {
                     $messages[] = ['role' => 'system', 'content' => $this->systemPrompt];
                 }
-
                 foreach ($this->conversationHistory as $msg) {
                     $messages[] = $msg;
                 }
-
                 $messages[] = ['role' => 'user', 'content' => $userContent];
 
                 $payload = [
@@ -555,24 +745,24 @@ final class LCS_AIManager
                     'n'        => $this->n,
                 ];
 
-                if ($this->maxTokens !== null)  { $payload['max_tokens']  = $this->maxTokens;  }
-                if ($this->temperature !== null){ $payload['temperature'] = $this->temperature; }
-                if ($this->topP !== null)       { $payload['top_p']       = $this->topP;        }
+                if ($this->maxTokens  !== null) { $payload['max_tokens']  = $this->maxTokens;  }
+                if ($this->temperature !== null) { $payload['temperature'] = $this->temperature; }
+                if ($this->topP        !== null) { $payload['top_p']       = $this->topP;        }
 
                 return $payload;
 
             // -----------------------------------------------------------------
-            case 'anthropic':
+            // Anthropic Messages API
+            // POST https://api.anthropic.com/v1/messages
             // -----------------------------------------------------------------
+            case 'anthropic':
                 $messages = [];
 
                 foreach ($this->conversationHistory as $msg) {
-                    // Anthropic does not support 'system' role in messages array
-                    if ($msg['role'] !== 'system') {
+                    if ($msg['role'] !== 'system') { // Anthropic messages[] rejects 'system' role
                         $messages[] = $msg;
                     }
                 }
-
                 $messages[] = ['role' => 'user', 'content' => $userContent];
 
                 $payload = [
@@ -584,22 +774,22 @@ final class LCS_AIManager
                 if (!empty($this->systemPrompt)) {
                     $payload['system'] = $this->systemPrompt;
                 }
-
-                if ($this->temperature !== null){ $payload['temperature'] = $this->temperature; }
-                if ($this->topP !== null)       { $payload['top_p']       = $this->topP;        }
+                if ($this->temperature !== null) { $payload['temperature'] = $this->temperature; }
+                if ($this->topP        !== null) { $payload['top_p']       = $this->topP;        }
 
                 return $payload;
 
             // -----------------------------------------------------------------
-            case 'google':
+            // Google Generative Language API
+            // POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
             // -----------------------------------------------------------------
+            case 'google':
                 $contents = [];
 
                 foreach ($this->conversationHistory as $msg) {
-                    $googleRole  = ($msg['role'] === 'assistant') ? 'model' : 'user';
-                    $contents[]  = ['role' => $googleRole, 'parts' => [['text' => $msg['content']]]];
+                    $role       = ($msg['role'] === 'assistant') ? 'model' : 'user';
+                    $contents[] = ['role' => $role, 'parts' => [['text' => $msg['content']]]];
                 }
-
                 $contents[] = ['role' => 'user', 'parts' => [['text' => $userContent]]];
 
                 $payload = ['contents' => $contents];
@@ -608,57 +798,58 @@ final class LCS_AIManager
                     $payload['systemInstruction'] = ['parts' => [['text' => $this->systemPrompt]]];
                 }
 
-                $generationConfig = [];
-                if ($this->maxTokens  !== null) { $generationConfig['maxOutputTokens'] = $this->maxTokens;  }
-                if ($this->temperature !== null) { $generationConfig['temperature']     = $this->temperature; }
-                if ($this->topP        !== null) { $generationConfig['topP']            = $this->topP;        }
-                if ($this->n > 1)               { $generationConfig['candidateCount']  = $this->n;           }
+                $gc = [];
+                if ($this->maxTokens  !== null) { $gc['maxOutputTokens'] = $this->maxTokens;  }
+                if ($this->temperature !== null) { $gc['temperature']     = $this->temperature; }
+                if ($this->topP        !== null) { $gc['topP']            = $this->topP;        }
+                if ($this->n > 1)               { $gc['candidateCount']  = $this->n;           }
 
-                if (!empty($generationConfig)) {
-                    $payload['generationConfig'] = $generationConfig;
+                if (!empty($gc)) {
+                    $payload['generationConfig'] = $gc;
                 }
 
                 return $payload;
 
             // -----------------------------------------------------------------
             default:
-            // -----------------------------------------------------------------
-                throw new \RuntimeException("buildContentPayload(): Unknown provider '{$this->provider}'");
+                throw new \RuntimeException(
+                    "buildContentPayload(): no payload builder for provider '{$this->provider}'"
+                );
         }
     }
 
     // =========================================================================
-    // Response normalisation
+    // Private — response normalisation
     // =========================================================================
 
     /**
-     * Normalise the raw API response into a consistent structure.
+     * Map a raw sendRequest() result to the library's normalised response shape.
      *
-     * All provider responses are mapped to the same output shape so callers
-     * never need to inspect which provider was used:
+     * Callers never need to inspect the provider to read a response — every
+     * generate*() method returns this same structure.
      *
-     * ```php
+     * Shape:
+     * ```
      * [
      *   'success'    => bool,
-     *   'text'       => string,          // Primary generated text
-     *   'texts'      => string[],        // All candidates (n > 1)
-     *   'usage'      => [                // Token usage if available
+     *   'text'       => string,        // primary generated text
+     *   'texts'      => string[],      // all candidates when n > 1
+     *   'usage'      => [
      *       'prompt_tokens'     => int,
      *       'completion_tokens' => int,
      *       'total_tokens'      => int,
      *   ],
-     *   'raw'        => array,           // The full decoded JSON from the API
+     *   'raw'        => array,         // full decoded JSON from the provider
      *   'http_code'  => int,
      *   'error'      => string|null,
      * ]
      * ```
      *
-     * @param array  $curlResult The array returned by LCS_Requests::send_curl().
-     * @param string $type       One of 'content', 'image', 'audio', 'video'.
+     * @param array $curlResult Return value of sendRequest().
      *
-     * @return array<string, mixed> Normalised result.
+     * @return array<string, mixed>
      */
-    private function normaliseResponse(array $curlResult, string $type = 'content'): array
+    private function normaliseResponse(array $curlResult): array
     {
         $base = [
             'success'   => false,
@@ -670,14 +861,15 @@ final class LCS_AIManager
             'error'     => $curlResult['error'] ?? null,
         ];
 
+        // Transport-level failure (cURL error)
         if (!empty($curlResult['error'])) {
-            $base['error'] = $curlResult['error'];
             return $base;
         }
 
-        $json      = $curlResult['json'] ?? [];
-        $httpCode  = (int)($curlResult['http_code'] ?? 0);
+        $json     = $curlResult['json'] ?? [];
+        $httpCode = (int)($curlResult['http_code'] ?? 0);
 
+        // HTTP-level failure or empty / non-JSON body
         if ($httpCode < 200 || $httpCode >= 300 || empty($json)) {
             $base['error'] = $json['error']['message']
                 ?? $json['message']
@@ -689,6 +881,8 @@ final class LCS_AIManager
 
         switch ($this->provider) {
 
+            // OpenAI Chat Completions response:
+            // { choices: [{ message: { role, content } }], usage: { ... } }
             case 'openai':
             case 'microsoft':
                 foreach ($json['choices'] ?? [] as $choice) {
@@ -701,6 +895,8 @@ final class LCS_AIManager
                 ];
                 break;
 
+            // Anthropic Messages response:
+            // { content: [{ type: 'text', text: '...' }], usage: { input_tokens, output_tokens } }
             case 'anthropic':
                 foreach ($json['content'] ?? [] as $block) {
                     if (($block['type'] ?? '') === 'text') {
@@ -710,10 +906,13 @@ final class LCS_AIManager
                 $base['usage'] = [
                     'prompt_tokens'     => $json['usage']['input_tokens']  ?? 0,
                     'completion_tokens' => $json['usage']['output_tokens'] ?? 0,
-                    'total_tokens'      => ($json['usage']['input_tokens'] ?? 0) + ($json['usage']['output_tokens'] ?? 0),
+                    'total_tokens'      => ($json['usage']['input_tokens']  ?? 0)
+                                        + ($json['usage']['output_tokens'] ?? 0),
                 ];
                 break;
 
+            // Google generateContent response:
+            // { candidates: [{ content: { parts: [{ text: '...' }] } }], usageMetadata: { ... } }
             case 'google':
                 foreach ($json['candidates'] ?? [] as $candidate) {
                     foreach ($candidate['content']['parts'] ?? [] as $part) {
@@ -736,91 +935,79 @@ final class LCS_AIManager
     }
 
     // =========================================================================
-    // Core generation methods
+    // Public — content generation
     // =========================================================================
 
     /**
      * Generate text content using the configured AI provider.
      *
-     * The method supports three input styles so you can use whichever fits
-     * your workflow:
+     * Three input styles:
      *
-     * 1. **Property-based** — set $this->prompt beforehand, call with no args:
+     * 1. No argument — reads $this->prompt:
      *    ```php
-     *    $ai->setPrompt('What is 2+2?');
+     *    $ai->setPrompt('Explain closures in PHP.');
      *    $result = $ai->generateContent();
      *    ```
      *
-     * 2. **String shorthand** — pass a plain string directly:
+     * 2. String — used directly as the user message:
      *    ```php
-     *    $result = $ai->generateContent('What is 2+2?');
+     *    $result = $ai->generateContent('Explain closures in PHP.');
      *    ```
      *
-     * 3. **Structured array** — pass a messages array to override history/prompt
-     *    completely (advanced, provider-agnostic shape used):
+     * 3. Messages array — fully replaces history and extracts roles:
      *    ```php
      *    $result = $ai->generateContent([
      *        ['role' => 'system',    'content' => 'Be concise.'],
-     *        ['role' => 'user',      'content' => 'What is 2+2?'],
+     *        ['role' => 'user',      'content' => 'What is a closure?'],
+     *        ['role' => 'assistant', 'content' => 'A closure captures its enclosing scope.'],
+     *        ['role' => 'user',      'content' => 'Show me a PHP example.'],
      *    ]);
      *    ```
      *
-     * Returned array shape (see normaliseResponse() for full details):
-     * ```php
-     * [
-     *   'success'   => true,
-     *   'text'      => 'The answer is 4.',
-     *   'texts'     => ['The answer is 4.'],
-     *   'usage'     => ['prompt_tokens' => 14, 'completion_tokens' => 6, 'total_tokens' => 20],
-     *   'raw'       => [...],  // full decoded JSON from the provider
-     *   'http_code' => 200,
-     *   'error'     => null,
-     * ]
-     * ```
+     * @param int|string|array|null $input
      *
-     * @param int|string|array|null $input Optional prompt override.
-     *                                     - string: used as the user message.
-     *                                     - array:  used as a full messages override.
-     *                                     - null:   falls back to $this->prompt.
+     * @return array<string, mixed> Normalised result.
      *
-     * @return array<string, mixed> Normalised generation result.
-     *
-     * @throws \RuntimeException If no prompt or input is provided, or if the
-     *                           provider/endpoint is not correctly configured.
+     * @throws \RuntimeException If no prompt is available or the provider is misconfigured.
      */
     public function generateContent(int|string|array|null $input = null): array
     {
-        // Resolve user content ------------------------------------------------
+        // --- Resolve user content -------------------------------------------
         if (is_string($input) || is_int($input)) {
             $userContent = (string)$input;
 
         } elseif (is_array($input)) {
-            // Caller passed a full messages array — use it directly by
-            // temporarily overriding history and extracting the last user msg.
-            $userContent = '';
+            $userContent               = '';
             $this->conversationHistory = [];
 
             foreach ($input as $msg) {
-                if (isset($msg['role'], $msg['content'])) {
-                    if ($msg['role'] === 'system') {
+                if (!isset($msg['role'], $msg['content'])) {
+                    continue;
+                }
+                switch ($msg['role']) {
+                    case 'system':
                         $this->systemPrompt = $msg['content'];
-                    } elseif ($msg['role'] === 'user') {
+                        break;
+                    case 'user':
                         $userContent = $msg['content'];
                         $this->addMessage('user', $msg['content']);
-                    } elseif ($msg['role'] === 'assistant') {
+                        break;
+                    case 'assistant':
                         $this->addMessage('assistant', $msg['content']);
-                    }
+                        break;
                 }
             }
 
-            // Pop the last user message — buildContentPayload appends it again
-            if (!empty($this->conversationHistory) &&
-                end($this->conversationHistory)['role'] === 'user') {
+            // buildContentPayload() will re-append the last user message,
+            // so pop it from history now to prevent duplication.
+            if (
+                !empty($this->conversationHistory) &&
+                end($this->conversationHistory)['role'] === 'user'
+            ) {
                 array_pop($this->conversationHistory);
             }
 
         } else {
-            // Fallback to the prompt property
             $userContent = $this->prompt ?? '';
         }
 
@@ -830,64 +1017,43 @@ final class LCS_AIManager
             );
         }
 
-        // Build request -------------------------------------------------------
-        $endpoint = $this->getEndpoint();
-        $headers  = $this->buildHeaders();
-        $payload  = $this->buildContentPayload($userContent);
+        // --- Build & send ---------------------------------------------------
+        $result = $this->sendRequest(
+            $this->getEndpoint(),
+            $this->buildContentPayload($userContent),
+            ['METHOD' => 'POST', 'HEADERS' => $this->buildHeaders(), 'TIMEOUT' => 60]
+        );
 
-        // Send ----------------------------------------------------------------
-        $REQUESTS = new LCS_Requests();
-        $result   = $REQUESTS->send_curl($endpoint, $payload, [
-            'METHOD'  => 'POST',
-            'HEADERS' => $headers,
-            'TIMEOUT' => 60,
-        ]);
-
-        return $this->normaliseResponse($result, 'content');
+        return $this->normaliseResponse($result);
     }
 
     /**
-     * Generate an image using the configured AI provider.
+     * Generate one or more images from a text prompt.
      *
-     * Supported providers: openai (DALL-E / gpt-image), google (Imagen).
+     * Supported: openai (DALL-E / gpt-image-1), google (Imagen).
      *
-     * Input can be:
-     * - **string** — the image generation prompt.
-     * - **array**  — extended options merged with defaults, e.g.:
-     *   ```php
-     *   [
-     *     'prompt' => 'A sunset over the ocean',
-     *     'size'   => '1024x1024',
-     *     'n'      => 2,
-     *     'style'  => 'vivid',          // OpenAI only
-     *     'quality'=> 'hd',             // OpenAI only
-     *   ]
-     *   ```
-     * - **null** — falls back to $this->prompt.
-     *
-     * Returned array shape:
      * ```php
-     * [
-     *   'success'   => true,
-     *   'text'      => '',              // not used for images
-     *   'images'    => [                // list of result images
-     *       ['url' => '...'],           // or ['b64_json' => '...']
-     *   ],
-     *   'raw'       => [...],
-     *   'http_code' => 200,
-     *   'error'     => null,
-     * ]
+     * // String prompt
+     * $result = $ai->generateImage('A sunset over Lagos lagoon');
+     *
+     * // Options array
+     * $result = $ai->generateImage([
+     *     'prompt'  => 'A sunset over Lagos lagoon',
+     *     'size'    => '1792x1024',
+     *     'style'   => 'vivid',    // OpenAI only
+     *     'quality' => 'hd',       // OpenAI only
+     *     'n'       => 2,
+     * ]);
      * ```
      *
-     * @param int|string|array|null $input Image prompt or options array.
+     * @param int|string|array|null $input
      *
-     * @return array<string, mixed> Normalised image generation result.
+     * @return array<string, mixed>
      *
-     * @throws \RuntimeException If no prompt is available or provider is unsupported for images.
+     * @throws \RuntimeException If no prompt or unsupported provider.
      */
     public function generateImage(int|string|array|null $input = null): array
     {
-        // Resolve prompt and options ------------------------------------------
         $prompt  = $this->prompt ?? '';
         $options = [];
 
@@ -900,34 +1066,29 @@ final class LCS_AIManager
 
         if (empty($prompt)) {
             throw new \RuntimeException(
-                'generateImage() requires a prompt. Set $this->prompt or pass it as the first argument.'
+                'generateImage() requires a prompt. Set $this->prompt or pass it as argument.'
             );
         }
 
-        // Build provider-specific payload and endpoint ------------------------
         switch ($this->provider) {
-
             case 'openai':
                 $endpoint = 'https://api.openai.com/v1/images/generations';
                 $payload  = [
-                    'model'  => $this->model ?? 'dall-e-3',
-                    'prompt' => $prompt,
-                    'n'      => $options['n'] ?? $this->n,
-                    'size'   => $options['size']    ?? '1024x1024',
-                    'style'  => $options['style']   ?? 'vivid',
-                    'quality'=> $options['quality'] ?? 'standard',
+                    'model'   => $this->model ?? 'dall-e-3',
+                    'prompt'  => $prompt,
+                    'n'       => $options['n']       ?? $this->n,
+                    'size'    => $options['size']    ?? '1024x1024',
+                    'style'   => $options['style']   ?? 'vivid',
+                    'quality' => $options['quality'] ?? 'standard',
                 ];
                 break;
 
             case 'google':
                 $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' .
-                            ($this->model ?? 'imagen-4.0-generate-001') .
-                            ':predict';
+                            ($this->model ?? 'imagen-4.0-generate-001') . ':predict';
                 $payload  = [
                     'instances'  => [['prompt' => $prompt]],
-                    'parameters' => [
-                        'sampleCount' => $options['n'] ?? $this->n,
-                    ],
+                    'parameters' => ['sampleCount' => $options['n'] ?? $this->n],
                 ];
                 break;
 
@@ -937,28 +1098,22 @@ final class LCS_AIManager
                 );
         }
 
-        // Send ----------------------------------------------------------------
-        $REQUESTS = new LCS_Requests();
-        $result   = $REQUESTS->send_curl($endpoint, $payload, [
+        $result   = $this->sendRequest($endpoint, $payload, [
             'METHOD'  => 'POST',
             'HEADERS' => $this->buildHeaders(),
             'TIMEOUT' => 120,
         ]);
 
-        // Normalise -----------------------------------------------------------
-        $base = [
-            'success'   => false,
-            'text'      => '',
-            'texts'     => [],
-            'images'    => [],
-            'usage'     => [],
-            'raw'       => $result['json'] ?? [],
-            'http_code' => $result['http_code'] ?? 0,
-            'error'     => $result['error'] ?? null,
-        ];
-
         $json     = $result['json'] ?? [];
         $httpCode = (int)($result['http_code'] ?? 0);
+
+        $base = [
+            'success'   => false,
+            'images'    => [],
+            'http_code' => $httpCode,
+            'error'     => $result['error'] ?? null,
+            'raw'       => $json,
+        ];
 
         if (!empty($result['error']) || $httpCode < 200 || $httpCode >= 300) {
             $base['error'] = $result['error']
@@ -968,7 +1123,6 @@ final class LCS_AIManager
         }
 
         $images = [];
-
         if ($this->provider === 'openai') {
             foreach ($json['data'] ?? [] as $item) {
                 $images[] = ['url' => $item['url'] ?? null, 'b64_json' => $item['b64_json'] ?? null];
@@ -986,41 +1140,28 @@ final class LCS_AIManager
     }
 
     /**
-     * Generate audio (text-to-speech) using the configured AI provider.
+     * Convert text to speech.
      *
-     * Supported providers: openai (tts-1, tts-1-hd, gpt-4o-mini-tts).
+     * Supported: openai (tts-1, tts-1-hd, gpt-4o-mini-tts).
      *
-     * Input can be:
-     * - **string** — the text to convert to speech.
-     * - **array**  — extended options:
-     *   ```php
-     *   [
-     *     'input'          => 'Hello world',
-     *     'voice'          => 'alloy',   // alloy|echo|fable|onyx|nova|shimmer
-     *     'response_format'=> 'mp3',     // mp3|opus|aac|flac
-     *     'speed'          => 1.0,       // 0.25 – 4.0
-     *   ]
-     *   ```
-     * - **null** — falls back to $this->prompt.
-     *
-     * Returned array shape:
      * ```php
-     * [
-     *   'success'       => true,
-     *   'text'          => '',          // not used for audio
-     *   'audio_binary'  => '...',       // raw binary string of the audio file
-     *   'format'        => 'mp3',
-     *   'raw'           => [],
-     *   'http_code'     => 200,
-     *   'error'         => null,
-     * ]
+     * $result = $ai->generateAudio('Welcome to the LCS platform.');
+     *
+     * $result = $ai->generateAudio([
+     *     'input'           => 'Hello world',
+     *     'voice'           => 'nova',   // alloy|echo|fable|onyx|nova|shimmer
+     *     'response_format' => 'opus',   // mp3|opus|aac|flac
+     *     'speed'           => 0.9,      // 0.25 – 4.0
+     * ]);
+     *
+     * file_put_contents('out.' . $result['format'], $result['audio_binary']);
      * ```
      *
-     * @param int|string|array|null $input Text to speak, or options array.
+     * @param int|string|array|null $input
      *
-     * @return array<string, mixed> Normalised audio generation result.
+     * @return array<string, mixed>
      *
-     * @throws \RuntimeException If provider does not support audio generation.
+     * @throws \RuntimeException If provider unsupported or no text available.
      */
     public function generateAudio(int|string|array|null $input = null): array
     {
@@ -1040,9 +1181,7 @@ final class LCS_AIManager
             );
         }
 
-        // Provider dispatch ---------------------------------------------------
         switch ($this->provider) {
-
             case 'openai':
                 $endpoint = 'https://api.openai.com/v1/audio/speech';
                 $payload  = [
@@ -1060,30 +1199,26 @@ final class LCS_AIManager
                 );
         }
 
-        // Send ----------------------------------------------------------------
-        $REQUESTS = new LCS_Requests();
-        $result   = $REQUESTS->send_curl($endpoint, $payload, [
+        $result   = $this->sendRequest($endpoint, $payload, [
             'METHOD'  => 'POST',
             'HEADERS' => $this->buildHeaders(),
             'TIMEOUT' => 60,
         ]);
 
-        // Audio comes back as raw binary, not JSON
         $httpCode = (int)($result['http_code'] ?? 0);
+        $format   = $options['response_format'] ?? 'mp3';
 
         $base = [
             'success'      => false,
-            'text'         => '',
-            'texts'        => [],
             'audio_binary' => '',
-            'format'       => $options['response_format'] ?? 'mp3',
-            'raw'          => $result['json'] ?? [],
+            'format'       => $format,
             'http_code'    => $httpCode,
             'error'        => $result['error'] ?? null,
+            'raw'          => $result['json'] ?? [],
         ];
 
         if (!empty($result['error']) || $httpCode < 200 || $httpCode >= 300) {
-            $errJson     = $result['json'] ?? [];
+            $errJson       = $result['json'] ?? [];
             $base['error'] = $result['error']
                 ?? $errJson['error']['message']
                 ?? ('HTTP ' . $httpCode);
@@ -1091,52 +1226,33 @@ final class LCS_AIManager
         }
 
         $base['success']      = true;
-        $base['audio_binary'] = $result['body'] ?? '';
+        $base['audio_binary'] = $result['body'] ?? ''; // audio is raw binary, not JSON
 
         return $base;
     }
 
     /**
-     * Generate a video using the configured AI provider.
+     * Submit a video generation job (async).
      *
-     * Supported providers: openai (Sora), google (Veo).
+     * Supported: openai (Sora), google (Veo).
+     * Use pollVideoJob() to check completion status.
      *
-     * Video generation is typically asynchronous. This method submits the job
-     * and returns the raw provider response including any job/operation ID that
-     * you can use to poll for completion with pollVideoJob().
+     * ```php
+     * $result = $ai->generateVideo('A drone shot over Victoria Island at golden hour');
      *
-     * Input can be:
-     * - **string** — the video generation prompt.
-     * - **array**  — extended options:
-     *   ```php
-     *   [
-     *     'prompt'   => 'A cat surfing on a wave',
-     *     'duration' => 5,      // seconds (provider limits apply)
+     * $result = $ai->generateVideo([
+     *     'prompt'   => 'Storm clouds forming over the Atlantic',
+     *     'duration' => 8,
      *     'size'     => '1280x720',
      *     'n'        => 1,
-     *   ]
-     *   ```
-     * - **null** — falls back to $this->prompt.
-     *
-     * Returned array shape:
-     * ```php
-     * [
-     *   'success'    => true,
-     *   'text'       => '',
-     *   'job_id'     => 'gen_abc123',   // use with pollVideoJob()
-     *   'status'     => 'queued',
-     *   'video_url'  => null,           // populated once job completes
-     *   'raw'        => [...],
-     *   'http_code'  => 200,
-     *   'error'      => null,
-     * ]
+     * ]);
      * ```
      *
-     * @param int|string|array|null $input Video prompt or options array.
+     * @param int|string|array|null $input
      *
-     * @return array<string, mixed> Normalised video generation result.
+     * @return array<string, mixed>
      *
-     * @throws \RuntimeException If provider does not support video generation.
+     * @throws \RuntimeException If provider unsupported or no prompt available.
      */
     public function generateVideo(int|string|array|null $input = null): array
     {
@@ -1156,31 +1272,27 @@ final class LCS_AIManager
             );
         }
 
-        // Provider dispatch ---------------------------------------------------
         switch ($this->provider) {
-
             case 'openai':
-                // Sora API (async job)
                 $endpoint = 'https://api.openai.com/v1/video/generations';
                 $payload  = [
-                    'model'       => $this->model ?? 'sora-2',
-                    'prompt'      => $prompt,
-                    'n'           => $options['n']        ?? 1,
-                    'duration'    => $options['duration'] ?? 5,
-                    'size'        => $options['size']     ?? '1280x720',
+                    'model'    => $this->model ?? 'sora-2',
+                    'prompt'   => $prompt,
+                    'n'        => $options['n']        ?? 1,
+                    'duration' => $options['duration'] ?? 5,
+                    'size'     => $options['size']     ?? '1280x720',
                 ];
                 break;
 
             case 'google':
-                // Veo via Vertex AI / Generative Language API (long-running operation)
                 $endpoint = sprintf(
                     'https://generativelanguage.googleapis.com/v1beta/models/%s:generateVideo',
                     $this->model ?? 'veo-3.0-generate-preview'
                 );
                 $payload  = [
-                    'prompt'         => $prompt,
-                    'sampleCount'    => $options['n']        ?? 1,
-                    'durationSeconds'=> $options['duration'] ?? 5,
+                    'prompt'          => $prompt,
+                    'sampleCount'     => $options['n']        ?? 1,
+                    'durationSeconds' => $options['duration'] ?? 5,
                 ];
                 break;
 
@@ -1190,28 +1302,23 @@ final class LCS_AIManager
                 );
         }
 
-        // Send ----------------------------------------------------------------
-        $REQUESTS = new LCS_Requests();
-        $result   = $REQUESTS->send_curl($endpoint, $payload, [
+        $result   = $this->sendRequest($endpoint, $payload, [
             'METHOD'  => 'POST',
             'HEADERS' => $this->buildHeaders(),
             'TIMEOUT' => 60,
         ]);
 
-        // Normalise -----------------------------------------------------------
         $json     = $result['json'] ?? [];
         $httpCode = (int)($result['http_code'] ?? 0);
 
         $base = [
             'success'   => false,
-            'text'      => '',
-            'texts'     => [],
             'job_id'    => null,
             'status'    => null,
             'video_url' => null,
-            'raw'       => $json,
             'http_code' => $httpCode,
             'error'     => $result['error'] ?? null,
+            'raw'       => $json,
         ];
 
         if (!empty($result['error']) || $httpCode < 200 || $httpCode >= 300) {
@@ -1222,10 +1329,9 @@ final class LCS_AIManager
         }
 
         $base['success'] = true;
-        $base['job_id']  = $json['id'] ?? $json['name'] ?? null;   // OpenAI: 'id', Google: 'name' (operation)
+        $base['job_id']  = $json['id'] ?? $json['name'] ?? null;
         $base['status']  = $json['status'] ?? 'queued';
 
-        // If the provider returned a completed video synchronously
         if (!empty($json['data'][0]['url'])) {
             $base['video_url'] = $json['data'][0]['url'];
             $base['status']    = 'completed';
@@ -1235,28 +1341,34 @@ final class LCS_AIManager
     }
 
     /**
-     * Poll an async video generation job for completion.
+     * Poll an async video generation job for its current status.
      *
-     * Use the job_id returned by generateVideo() to query status until the
-     * video is ready. Poll at a reasonable interval (e.g. every 5–10 seconds);
-     * do not hammer the provider endpoint.
+     * ```php
+     * $job = $ai->generateVideo('...');
+     * for ($i = 0; $i < 30; $i++) {
+     *     sleep(10);
+     *     $poll = $ai->pollVideoJob($job['job_id']);
+     *     if ($poll['status'] === 'completed') {
+     *         echo $poll['video_url'];
+     *         break;
+     *     }
+     * }
+     * ```
      *
-     * @param string $jobId The job/operation ID returned by generateVideo().
+     * @param string $jobId Value from generateVideo()['job_id'].
      *
-     * @return array<string, mixed> Result with 'status', 'video_url', and 'raw' keys.
+     * @return array<string, mixed>
      *
-     * @throws \RuntimeException If polling is not supported for the current provider.
+     * @throws \RuntimeException If provider does not support polling.
      */
     public function pollVideoJob(string $jobId): array
     {
         switch ($this->provider) {
-
             case 'openai':
                 $endpoint = 'https://api.openai.com/v1/video/generations/' . urlencode($jobId);
                 break;
 
             case 'google':
-                // Long-running operation name is used as the polling path
                 $endpoint = 'https://generativelanguage.googleapis.com/v1beta/' . ltrim($jobId, '/');
                 break;
 
@@ -1266,8 +1378,7 @@ final class LCS_AIManager
                 );
         }
 
-        $REQUESTS = new LCS_Requests();
-        $result   = $REQUESTS->send_curl($endpoint, null, [
+        $result   = $this->sendRequest($endpoint, null, [
             'METHOD'  => 'GET',
             'HEADERS' => $this->buildHeaders(),
             'TIMEOUT' => 30,
@@ -1280,18 +1391,20 @@ final class LCS_AIManager
             'success'   => false,
             'status'    => null,
             'video_url' => null,
-            'raw'       => $json,
             'http_code' => $httpCode,
             'error'     => $result['error'] ?? null,
+            'raw'       => $json,
         ];
 
         if (!empty($result['error']) || $httpCode < 200 || $httpCode >= 300) {
-            $base['error'] = $result['error'] ?? $json['error']['message'] ?? ('HTTP ' . $httpCode);
+            $base['error'] = $result['error']
+                ?? $json['error']['message']
+                ?? ('HTTP ' . $httpCode);
             return $base;
         }
 
         $base['success'] = true;
-        $base['status']  = $json['status'] ?? ($json['done'] ? 'completed' : 'processing');
+        $base['status']  = $json['status'] ?? (($json['done'] ?? false) ? 'completed' : 'processing');
 
         if (!empty($json['data'][0]['url'])) {
             $base['video_url'] = $json['data'][0]['url'];
@@ -1303,37 +1416,36 @@ final class LCS_AIManager
     }
 
     // =========================================================================
-    // Convenience / utility methods
+    // Public — convenience helpers
     // =========================================================================
 
     /**
-     * Quick one-shot content generation without mutating instance state.
+     * One-shot question with zero state mutation.
      *
-     * Useful when you need a single response without altering the ongoing
-     * conversation history or prompt properties of the instance.
+     * Sends a question and returns the plain text answer. Neither $this->prompt
+     * nor $this->conversationHistory is affected — state is fully restored.
+     *
+     * Returns an empty string on API-level failure; never throws for those.
      *
      * ```php
-     * $answer = $ai->ask('What is the capital of France?');
-     * echo $answer; // "Paris"
+     * echo $ai->ask('What is the capital of Nigeria?');
+     * // "The capital of Nigeria is Abuja."
      * ```
      *
-     * @param string $question The user question / prompt.
+     * @param string $question
      *
-     * @return string The generated text, or an empty string on failure.
+     * @return string Generated text or empty string on failure.
      */
     public function ask(string $question): string
     {
-        // Preserve existing state
-        $savedPrompt   = $this->prompt;
-        $savedHistory  = $this->conversationHistory;
+        $savedPrompt  = $this->prompt;
+        $savedHistory = $this->conversationHistory;
 
-        // Run isolated request
         $this->prompt              = $question;
         $this->conversationHistory = [];
 
         $result = $this->generateContent();
 
-        // Restore state
         $this->prompt              = $savedPrompt;
         $this->conversationHistory = $savedHistory;
 
@@ -1341,29 +1453,27 @@ final class LCS_AIManager
     }
 
     /**
-     * Continue a multi-turn conversation.
+     * Send a message and automatically maintain multi-turn context.
      *
-     * Sends the user message, then automatically appends both the user message
-     * and the assistant reply to the conversation history so the next call
-     * retains full context.
+     * Appends both the user turn and assistant reply to conversationHistory
+     * after each call, so subsequent calls carry the full thread.
      *
      * ```php
-     * $ai->chat('Who wrote Hamlet?');
-     * $ai->chat('And what year was it written?');  // model has context from turn 1
+     * $ai->setSystemPrompt('You are a football analyst.');
+     * $ai->chat('Who leads EFL League One?');
+     * $ai->chat('How have they performed away from home?');
      * ```
      *
-     * @param string $userMessage The next user message in the conversation.
+     * @param string $userMessage
      *
-     * @return array<string, mixed> Full normalised response (same shape as generateContent()).
+     * @return array<string, mixed> Same shape as generateContent().
      */
     public function chat(string $userMessage): array
     {
         $this->prompt = $userMessage;
         $result       = $this->generateContent();
 
-        // Add both turns to history for next call
         $this->addMessage('user', $userMessage);
-
         if ($result['success'] && !empty($result['text'])) {
             $this->addMessage('assistant', $result['text']);
         }
@@ -1371,39 +1481,38 @@ final class LCS_AIManager
         return $result;
     }
 
+    // =========================================================================
+    // Public — introspection & utilities
+    // =========================================================================
+
     /**
-     * Return a snapshot of the current manager configuration.
+     * Return a snapshot of the current instance configuration.
      *
-     * Useful for debugging, logging, or persisting session state.
-     *
-     * @return array<string, mixed> Current configuration values.
+     * @return array<string, mixed>
      */
     public function getConfig(): array
     {
         return [
-            'provider'            => $this->provider,
-            'model'               => $this->model,
-            'modelState'          => $this->modelState,
-            'modelGroup'          => $this->modelGroup,
-            'maxTokens'           => $this->maxTokens,
-            'temperature'         => $this->temperature,
-            'topP'                => $this->topP,
-            'n'                   => $this->n,
-            'hasSystemPrompt'     => !empty($this->systemPrompt),
-            'hasPrompt'           => !empty($this->prompt),
-            'historyLength'       => count($this->conversationHistory),
-            'hasAzureConfig'      => !empty($this->azureResourceName),
-            'apiVersionSet'       => !empty($this->apiVersion),
+            'provider'        => $this->provider,
+            'model'           => $this->model,
+            'modelState'      => $this->modelState,
+            'modelGroup'      => $this->modelGroup,
+            'maxTokens'       => $this->maxTokens,
+            'temperature'     => $this->temperature,
+            'topP'            => $this->topP,
+            'n'               => $this->n,
+            'hasSystemPrompt' => !empty($this->systemPrompt),
+            'hasPrompt'       => !empty($this->prompt),
+            'historyLength'   => count($this->conversationHistory),
+            'hasAzureConfig'  => !empty($this->azureResourceName),
+            'apiVersionSet'   => !empty($this->apiVersion),
         ];
     }
 
     /**
-     * List all available models for the current provider and state filter.
+     * List all model identifiers for the current provider + modelState filter.
      *
-     * Delegates to LLM_Configs::getModels() with the currently set provider
-     * and modelState, returning a flat array of model identifier strings.
-     *
-     * @return array<int, string> List of model identifiers.
+     * @return string[]
      */
     public function listModels(): array
     {
@@ -1411,9 +1520,9 @@ final class LCS_AIManager
     }
 
     /**
-     * List all available models for the current provider, grouped by family.
+     * List all models for the current provider grouped by family name.
      *
-     * @return array<string, array<int, string>> Model list grouped by family name.
+     * @return array<string, string[]>
      */
     public function listModelsByGroup(): array
     {
@@ -1428,23 +1537,27 @@ final class LCS_AIManager
     }
 
     /**
-     * Check whether the current model belongs to a specific family/group.
+     * Return true if the active model belongs to the named family/group.
      *
-     * @param string $groupName Group/family name, e.g. 'frontier', 'image', 'claude'.
+     * ```php
+     * $ai->setModel('dall-e-3');
+     * $ai->modelBelongsToGroup('image');    // true
+     * $ai->modelBelongsToGroup('frontier'); // false
+     * ```
      *
-     * @return bool True if the active model is in the specified group.
+     * @param string $groupName e.g. 'image', 'frontier', 'claude'
+     *
+     * @return bool
      */
     public function modelBelongsToGroup(string $groupName): bool
     {
-        $group = self::getModelGroup($this->model ?? '');
-        return $group === $groupName;
+        return self::getModelGroup($this->model ?? '') === $groupName;
     }
 
     /**
-     * Reset the manager to its default configuration.
+     * Reset all prompt, conversation, and generation state to defaults.
      *
-     * Clears conversation history, prompt, system prompt, and all generation
-     * parameters. Provider, model, and API credentials are preserved.
+     * Provider, model, and API credentials are NOT changed.
      */
     public function reset(): void
     {
