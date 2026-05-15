@@ -1,0 +1,2006 @@
+[
+  {
+    "countryName": "Afghanistan",
+    "iso2": "AF",
+    "iso3": "AFG",
+    "callingCode": "+93",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Albania",
+    "iso2": "AL",
+    "iso3": "ALB",
+    "callingCode": "+355",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Algeria",
+    "iso2": "DZ",
+    "iso3": "DZA",
+    "callingCode": "+213",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Andorra",
+    "iso2": "AD",
+    "iso3": "AND",
+    "callingCode": "+376",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Angola",
+    "iso2": "AO",
+    "iso3": "AGO",
+    "callingCode": "+244",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Antigua and Barbuda",
+    "iso2": "AG",
+    "iso3": "ATG",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      268
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Argentina",
+    "iso2": "AR",
+    "iso3": "ARG",
+    "callingCode": "+54",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Armenia",
+    "iso2": "AM",
+    "iso3": "ARM",
+    "callingCode": "+374",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Australia",
+    "iso2": "AU",
+    "iso3": "AUS",
+    "callingCode": "+61",
+    "trunkPrefix": "0",
+    "internationalPrefix": "0011"
+  },
+  {
+    "countryName": "Austria",
+    "iso2": "AT",
+    "iso3": "AUT",
+    "callingCode": "+43",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Azerbaijan",
+    "iso2": "AZ",
+    "iso3": "AZE",
+    "callingCode": "+994",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bahamas",
+    "iso2": "BS",
+    "iso3": "BHS",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      242
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Bahrain",
+    "iso2": "BH",
+    "iso3": "BHR",
+    "callingCode": "+973",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bangladesh",
+    "iso2": "BD",
+    "iso3": "BGD",
+    "callingCode": "+880",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Barbados",
+    "iso2": "BB",
+    "iso3": "BRB",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      246
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Belarus",
+    "iso2": "BY",
+    "iso3": "BLR",
+    "callingCode": "+375",
+    "trunkPrefix": "80",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Belgium",
+    "iso2": "BE",
+    "iso3": "BEL",
+    "callingCode": "+32",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Belize",
+    "iso2": "BZ",
+    "iso3": "BLZ",
+    "callingCode": "+501",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Benin",
+    "iso2": "BJ",
+    "iso3": "BEN",
+    "callingCode": "+229",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bhutan",
+    "iso2": "BT",
+    "iso3": "BTN",
+    "callingCode": "+975",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bolivia",
+    "iso2": "BO",
+    "iso3": "BOL",
+    "callingCode": "+591",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bosnia and Herzegovina",
+    "iso2": "BA",
+    "iso3": "BIH",
+    "callingCode": "+387",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Botswana",
+    "iso2": "BW",
+    "iso3": "BWA",
+    "callingCode": "+267",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Brazil",
+    "iso2": "BR",
+    "iso3": "BRA",
+    "callingCode": "+55",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Brunei",
+    "iso2": "BN",
+    "iso3": "BRN",
+    "callingCode": "+673",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Bulgaria",
+    "iso2": "BG",
+    "iso3": "BGR",
+    "callingCode": "+359",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Burkina Faso",
+    "iso2": "BF",
+    "iso3": "BFA",
+    "callingCode": "+226",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Burundi",
+    "iso2": "BI",
+    "iso3": "BDI",
+    "callingCode": "+257",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Cabo Verde",
+    "iso2": "CV",
+    "iso3": "CPV",
+    "callingCode": "+238",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Cambodia",
+    "iso2": "KH",
+    "iso3": "KHM",
+    "callingCode": "+855",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Cameroon",
+    "iso2": "CM",
+    "iso3": "CMR",
+    "callingCode": "+237",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Canada",
+    "iso2": "CA",
+    "iso3": "CAN",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      204,
+      226,
+      236,
+      249,
+      250,
+      263,
+      289,
+      306,
+      343,
+      354,
+      365,
+      367,
+      368,
+      382,
+      387,
+      403,
+      416,
+      418,
+      428,
+      431,
+      437,
+      438,
+      450,
+      468,
+      474,
+      506,
+      514,
+      519,
+      548,
+      579,
+      581,
+      584,
+      587,
+      604,
+      613,
+      623,
+      639,
+      647,
+      672,
+      683,
+      705,
+      709,
+      742,
+      753,
+      778,
+      780,
+      782,
+      807,
+      819,
+      825,
+      867,
+      873,
+      902,
+      905
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Central African Republic",
+    "iso2": "CF",
+    "iso3": "CAF",
+    "callingCode": "+236",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Chad",
+    "iso2": "TD",
+    "iso3": "TCD",
+    "callingCode": "+235",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Chile",
+    "iso2": "CL",
+    "iso3": "CHL",
+    "callingCode": "+56",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "China",
+    "iso2": "CN",
+    "iso3": "CHN",
+    "callingCode": "+86",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Colombia",
+    "iso2": "CO",
+    "iso3": "COL",
+    "callingCode": "+57",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Comoros",
+    "iso2": "KM",
+    "iso3": "COM",
+    "callingCode": "+269",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Congo (Democratic Republic)",
+    "iso2": "CD",
+    "iso3": "COD",
+    "callingCode": "+243",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Congo (Republic)",
+    "iso2": "CG",
+    "iso3": "COG",
+    "callingCode": "+242",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Costa Rica",
+    "iso2": "CR",
+    "iso3": "CRI",
+    "callingCode": "+506",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Croatia",
+    "iso2": "HR",
+    "iso3": "HRV",
+    "callingCode": "+385",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Cuba",
+    "iso2": "CU",
+    "iso3": "CUB",
+    "callingCode": "+53",
+    "trunkPrefix": "0",
+    "internationalPrefix": "119"
+  },
+  {
+    "countryName": "Cyprus",
+    "iso2": "CY",
+    "iso3": "CYP",
+    "callingCode": "+357",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Czech Republic",
+    "iso2": "CZ",
+    "iso3": "CZE",
+    "callingCode": "+420",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Denmark",
+    "iso2": "DK",
+    "iso3": "DNK",
+    "callingCode": "+45",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Djibouti",
+    "iso2": "DJ",
+    "iso3": "DJI",
+    "callingCode": "+253",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Dominica",
+    "iso2": "DM",
+    "iso3": "DMA",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      767
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Dominican Republic",
+    "iso2": "DO",
+    "iso3": "DOM",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      809,
+      829,
+      849
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Ecuador",
+    "iso2": "EC",
+    "iso3": "ECU",
+    "callingCode": "+593",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Egypt",
+    "iso2": "EG",
+    "iso3": "EGY",
+    "callingCode": "+20",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "El Salvador",
+    "iso2": "SV",
+    "iso3": "SLV",
+    "callingCode": "+503",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Equatorial Guinea",
+    "iso2": "GQ",
+    "iso3": "GNQ",
+    "callingCode": "+240",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Eritrea",
+    "iso2": "ER",
+    "iso3": "ERI",
+    "callingCode": "+291",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Estonia",
+    "iso2": "EE",
+    "iso3": "EST",
+    "callingCode": "+372",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Eswatini",
+    "iso2": "SZ",
+    "iso3": "SWZ",
+    "callingCode": "+268",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Ethiopia",
+    "iso2": "ET",
+    "iso3": "ETH",
+    "callingCode": "+251",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Fiji",
+    "iso2": "FJ",
+    "iso3": "FJI",
+    "callingCode": "+679",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Finland",
+    "iso2": "FI",
+    "iso3": "FIN",
+    "callingCode": "+358",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "France",
+    "iso2": "FR",
+    "iso3": "FRA",
+    "callingCode": "+33",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Gabon",
+    "iso2": "GA",
+    "iso3": "GAB",
+    "callingCode": "+241",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Gambia",
+    "iso2": "GM",
+    "iso3": "GMB",
+    "callingCode": "+220",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Georgia",
+    "iso2": "GE",
+    "iso3": "GEO",
+    "callingCode": "+995",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Germany",
+    "iso2": "DE",
+    "iso3": "DEU",
+    "callingCode": "+49",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Ghana",
+    "iso2": "GH",
+    "iso3": "GHA",
+    "callingCode": "+233",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Greece",
+    "iso2": "GR",
+    "iso3": "GRC",
+    "callingCode": "+30",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Grenada",
+    "iso2": "GD",
+    "iso3": "GRD",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      473
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Guatemala",
+    "iso2": "GT",
+    "iso3": "GTM",
+    "callingCode": "+502",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Guinea",
+    "iso2": "GN",
+    "iso3": "GIN",
+    "callingCode": "+224",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Guinea-Bissau",
+    "iso2": "GW",
+    "iso3": "GNB",
+    "callingCode": "+245",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Guyana",
+    "iso2": "GY",
+    "iso3": "GUY",
+    "callingCode": "+592",
+    "trunkPrefix": null,
+    "internationalPrefix": "001"
+  },
+  {
+    "countryName": "Haiti",
+    "iso2": "HT",
+    "iso3": "HTI",
+    "callingCode": "+509",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Honduras",
+    "iso2": "HN",
+    "iso3": "HND",
+    "callingCode": "+504",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Hungary",
+    "iso2": "HU",
+    "iso3": "HUN",
+    "callingCode": "+36",
+    "trunkPrefix": "06",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Iceland",
+    "iso2": "IS",
+    "iso3": "ISL",
+    "callingCode": "+354",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "India",
+    "iso2": "IN",
+    "iso3": "IND",
+    "callingCode": "+91",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Indonesia",
+    "iso2": "ID",
+    "iso3": "IDN",
+    "callingCode": "+62",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Iran",
+    "iso2": "IR",
+    "iso3": "IRN",
+    "callingCode": "+98",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Iraq",
+    "iso2": "IQ",
+    "iso3": "IRQ",
+    "callingCode": "+964",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Ireland",
+    "iso2": "IE",
+    "iso3": "IRL",
+    "callingCode": "+353",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Israel",
+    "iso2": "IL",
+    "iso3": "ISR",
+    "callingCode": "+972",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Italy",
+    "iso2": "IT",
+    "iso3": "ITA",
+    "callingCode": "+39",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Ivory Coast (Côte d'Ivoire)",
+    "iso2": "CI",
+    "iso3": "CIV",
+    "callingCode": "+225",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Jamaica",
+    "iso2": "JM",
+    "iso3": "JAM",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      658,
+      876
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Japan",
+    "iso2": "JP",
+    "iso3": "JPN",
+    "callingCode": "+81",
+    "trunkPrefix": "0",
+    "internationalPrefix": "010"
+  },
+  {
+    "countryName": "Jordan",
+    "iso2": "JO",
+    "iso3": "JOR",
+    "callingCode": "+962",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Kazakhstan",
+    "iso2": "KZ",
+    "iso3": "KAZ",
+    "callingCode": "+7",
+    "trunkPrefix": "8",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Kenya",
+    "iso2": "KE",
+    "iso3": "KEN",
+    "callingCode": "+254",
+    "trunkPrefix": "0",
+    "internationalPrefix": "000"
+  },
+  {
+    "countryName": "Kiribati",
+    "iso2": "KI",
+    "iso3": "KIR",
+    "callingCode": "+686",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Kosovo",
+    "iso2": "XK",
+    "iso3": "XKX",
+    "callingCode": "+383",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Kuwait",
+    "iso2": "KW",
+    "iso3": "KWT",
+    "callingCode": "+965",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Kyrgyzstan",
+    "iso2": "KG",
+    "iso3": "KGZ",
+    "callingCode": "+996",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Laos",
+    "iso2": "LA",
+    "iso3": "LAO",
+    "callingCode": "+856",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Latvia",
+    "iso2": "LV",
+    "iso3": "LVA",
+    "callingCode": "+371",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Lebanon",
+    "iso2": "LB",
+    "iso3": "LBN",
+    "callingCode": "+961",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Lesotho",
+    "iso2": "LS",
+    "iso3": "LSO",
+    "callingCode": "+266",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Liberia",
+    "iso2": "LR",
+    "iso3": "LBR",
+    "callingCode": "+231",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Libya",
+    "iso2": "LY",
+    "iso3": "LBY",
+    "callingCode": "+218",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Liechtenstein",
+    "iso2": "LI",
+    "iso3": "LIE",
+    "callingCode": "+423",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Lithuania",
+    "iso2": "LT",
+    "iso3": "LTU",
+    "callingCode": "+370",
+    "trunkPrefix": "8",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Luxembourg",
+    "iso2": "LU",
+    "iso3": "LUX",
+    "callingCode": "+352",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Madagascar",
+    "iso2": "MG",
+    "iso3": "MDG",
+    "callingCode": "+261",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Malawi",
+    "iso2": "MW",
+    "iso3": "MWI",
+    "callingCode": "+265",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Malaysia",
+    "iso2": "MY",
+    "iso3": "MYS",
+    "callingCode": "+60",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Maldives",
+    "iso2": "MV",
+    "iso3": "MDV",
+    "callingCode": "+960",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Mali",
+    "iso2": "ML",
+    "iso3": "MLI",
+    "callingCode": "+223",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Malta",
+    "iso2": "MT",
+    "iso3": "MLT",
+    "callingCode": "+356",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Marshall Islands",
+    "iso2": "MH",
+    "iso3": "MHL",
+    "callingCode": "+692",
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Mauritania",
+    "iso2": "MR",
+    "iso3": "MRT",
+    "callingCode": "+222",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Mauritius",
+    "iso2": "MU",
+    "iso3": "MUS",
+    "callingCode": "+230",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Mexico",
+    "iso2": "MX",
+    "iso3": "MEX",
+    "callingCode": "+52",
+    "trunkPrefix": "01",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Micronesia",
+    "iso2": "FM",
+    "iso3": "FSM",
+    "callingCode": "+691",
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Moldova",
+    "iso2": "MD",
+    "iso3": "MDA",
+    "callingCode": "+373",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Monaco",
+    "iso2": "MC",
+    "iso3": "MCO",
+    "callingCode": "+377",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Mongolia",
+    "iso2": "MN",
+    "iso3": "MNG",
+    "callingCode": "+976",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Montenegro",
+    "iso2": "ME",
+    "iso3": "MNE",
+    "callingCode": "+382",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Morocco",
+    "iso2": "MA",
+    "iso3": "MAR",
+    "callingCode": "+212",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Mozambique",
+    "iso2": "MZ",
+    "iso3": "MOZ",
+    "callingCode": "+258",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Myanmar",
+    "iso2": "MM",
+    "iso3": "MMR",
+    "callingCode": "+95",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Namibia",
+    "iso2": "NA",
+    "iso3": "NAM",
+    "callingCode": "+264",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Nauru",
+    "iso2": "NR",
+    "iso3": "NRU",
+    "callingCode": "+674",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Nepal",
+    "iso2": "NP",
+    "iso3": "NPL",
+    "callingCode": "+977",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Netherlands",
+    "iso2": "NL",
+    "iso3": "NLD",
+    "callingCode": "+31",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "New Zealand",
+    "iso2": "NZ",
+    "iso3": "NZL",
+    "callingCode": "+64",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Nicaragua",
+    "iso2": "NI",
+    "iso3": "NIC",
+    "callingCode": "+505",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Niger",
+    "iso2": "NE",
+    "iso3": "NER",
+    "callingCode": "+227",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Nigeria",
+    "iso2": "NG",
+    "iso3": "NGA",
+    "callingCode": "+234",
+    "trunkPrefix": "0",
+    "internationalPrefix": "009"
+  },
+  {
+    "countryName": "North Korea",
+    "iso2": "KP",
+    "iso3": "PRK",
+    "callingCode": "+850",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "North Macedonia",
+    "iso2": "MK",
+    "iso3": "MKD",
+    "callingCode": "+389",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Norway",
+    "iso2": "NO",
+    "iso3": "NOR",
+    "callingCode": "+47",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Oman",
+    "iso2": "OM",
+    "iso3": "OMN",
+    "callingCode": "+968",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Pakistan",
+    "iso2": "PK",
+    "iso3": "PAK",
+    "callingCode": "+92",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Palau",
+    "iso2": "PW",
+    "iso3": "PLW",
+    "callingCode": "+680",
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Panama",
+    "iso2": "PA",
+    "iso3": "PAN",
+    "callingCode": "+507",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Papua New Guinea",
+    "iso2": "PG",
+    "iso3": "PNG",
+    "callingCode": "+675",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Paraguay",
+    "iso2": "PY",
+    "iso3": "PRY",
+    "callingCode": "+595",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Peru",
+    "iso2": "PE",
+    "iso3": "PER",
+    "callingCode": "+51",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Philippines",
+    "iso2": "PH",
+    "iso3": "PHL",
+    "callingCode": "+63",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Poland",
+    "iso2": "PL",
+    "iso3": "POL",
+    "callingCode": "+48",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Portugal",
+    "iso2": "PT",
+    "iso3": "PRT",
+    "callingCode": "+351",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Qatar",
+    "iso2": "QA",
+    "iso3": "QAT",
+    "callingCode": "+974",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Romania",
+    "iso2": "RO",
+    "iso3": "ROU",
+    "callingCode": "+40",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Russia",
+    "iso2": "RU",
+    "iso3": "RUS",
+    "callingCode": "+7",
+    "trunkPrefix": "8",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Rwanda",
+    "iso2": "RW",
+    "iso3": "RWA",
+    "callingCode": "+250",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Saint Kitts and Nevis",
+    "iso2": "KN",
+    "iso3": "KNA",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      869
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Saint Lucia",
+    "iso2": "LC",
+    "iso3": "LCA",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      758
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Saint Vincent and the Grenadines",
+    "iso2": "VC",
+    "iso3": "VCT",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      784
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Samoa",
+    "iso2": "WS",
+    "iso3": "WSM",
+    "callingCode": "+685",
+    "trunkPrefix": null,
+    "internationalPrefix": "0"
+  },
+  {
+    "countryName": "San Marino",
+    "iso2": "SM",
+    "iso3": "SMR",
+    "callingCode": "+378",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "São Tomé and Príncipe",
+    "iso2": "ST",
+    "iso3": "STP",
+    "callingCode": "+239",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Saudi Arabia",
+    "iso2": "SA",
+    "iso3": "SAU",
+    "callingCode": "+966",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Senegal",
+    "iso2": "SN",
+    "iso3": "SEN",
+    "callingCode": "+221",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Serbia",
+    "iso2": "RS",
+    "iso3": "SRB",
+    "callingCode": "+381",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Seychelles",
+    "iso2": "SC",
+    "iso3": "SYC",
+    "callingCode": "+248",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Sierra Leone",
+    "iso2": "SL",
+    "iso3": "SLE",
+    "callingCode": "+232",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Singapore",
+    "iso2": "SG",
+    "iso3": "SGP",
+    "callingCode": "+65",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Slovakia",
+    "iso2": "SK",
+    "iso3": "SVK",
+    "callingCode": "+421",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Slovenia",
+    "iso2": "SI",
+    "iso3": "SVN",
+    "callingCode": "+386",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Solomon Islands",
+    "iso2": "SB",
+    "iso3": "SLB",
+    "callingCode": "+677",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Somalia",
+    "iso2": "SO",
+    "iso3": "SOM",
+    "callingCode": "+252",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "South Africa",
+    "iso2": "ZA",
+    "iso3": "ZAF",
+    "callingCode": "+27",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "South Korea",
+    "iso2": "KR",
+    "iso3": "KOR",
+    "callingCode": "+82",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "South Sudan",
+    "iso2": "SS",
+    "iso3": "SSD",
+    "callingCode": "+211",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Spain",
+    "iso2": "ES",
+    "iso3": "ESP",
+    "callingCode": "+34",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Sri Lanka",
+    "iso2": "LK",
+    "iso3": "LKA",
+    "callingCode": "+94",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Sudan",
+    "iso2": "SD",
+    "iso3": "SDN",
+    "callingCode": "+249",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Suriname",
+    "iso2": "SR",
+    "iso3": "SUR",
+    "callingCode": "+597",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Sweden",
+    "iso2": "SE",
+    "iso3": "SWE",
+    "callingCode": "+46",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Switzerland",
+    "iso2": "CH",
+    "iso3": "CHE",
+    "callingCode": "+41",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Syria",
+    "iso2": "SY",
+    "iso3": "SYR",
+    "callingCode": "+963",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Taiwan",
+    "iso2": "TW",
+    "iso3": "TWN",
+    "callingCode": "+886",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Tajikistan",
+    "iso2": "TJ",
+    "iso3": "TJK",
+    "callingCode": "+992",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Tanzania",
+    "iso2": "TZ",
+    "iso3": "TZA",
+    "callingCode": "+255",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Thailand",
+    "iso2": "TH",
+    "iso3": "THA",
+    "callingCode": "+66",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Timor-Leste",
+    "iso2": "TL",
+    "iso3": "TLS",
+    "callingCode": "+670",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Togo",
+    "iso2": "TG",
+    "iso3": "TGO",
+    "callingCode": "+228",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Tonga",
+    "iso2": "TO",
+    "iso3": "TON",
+    "callingCode": "+676",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Trinidad and Tobago",
+    "iso2": "TT",
+    "iso3": "TTO",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      868
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Tunisia",
+    "iso2": "TN",
+    "iso3": "TUN",
+    "callingCode": "+216",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Turkey",
+    "iso2": "TR",
+    "iso3": "TUR",
+    "callingCode": "+90",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Turkmenistan",
+    "iso2": "TM",
+    "iso3": "TKM",
+    "callingCode": "+993",
+    "trunkPrefix": "8",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Tuvalu",
+    "iso2": "TV",
+    "iso3": "TUV",
+    "callingCode": "+688",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Uganda",
+    "iso2": "UG",
+    "iso3": "UGA",
+    "callingCode": "+256",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Ukraine",
+    "iso2": "UA",
+    "iso3": "UKR",
+    "callingCode": "+380",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "United Arab Emirates",
+    "iso2": "AE",
+    "iso3": "ARE",
+    "callingCode": "+971",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "United Kingdom",
+    "iso2": "GB",
+    "iso3": "GBR",
+    "callingCode": "+44",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "United States",
+    "iso2": "US",
+    "iso3": "USA",
+    "callingCode": "+1",
+    "nanpAreaCodes": [
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      223,
+      224,
+      225,
+      227,
+      228,
+      229,
+      231,
+      234,
+      239,
+      240,
+      248,
+      251,
+      252,
+      253,
+      254,
+      256,
+      260,
+      262,
+      267,
+      269,
+      270,
+      272,
+      276,
+      279,
+      281,
+      283,
+      301,
+      302,
+      303,
+      304,
+      305,
+      307,
+      308,
+      309,
+      310,
+      312,
+      313,
+      314,
+      315,
+      316,
+      317,
+      318,
+      319,
+      320,
+      321,
+      323,
+      325,
+      326,
+      327,
+      330,
+      331,
+      332,
+      334,
+      336,
+      337,
+      339,
+      341,
+      346,
+      347,
+      351,
+      352,
+      360,
+      361,
+      364,
+      380,
+      385,
+      386,
+      401,
+      402,
+      404,
+      405,
+      406,
+      407,
+      408,
+      409,
+      410,
+      412,
+      413,
+      414,
+      415,
+      417,
+      419,
+      423,
+      424,
+      425,
+      430,
+      432,
+      434,
+      435,
+      440,
+      442,
+      443,
+      445,
+      447,
+      448,
+      458,
+      463,
+      469,
+      470,
+      472,
+      475,
+      478,
+      479,
+      480,
+      484,
+      501,
+      502,
+      503,
+      504,
+      505,
+      507,
+      508,
+      509,
+      510,
+      512,
+      513,
+      515,
+      516,
+      517,
+      518,
+      520,
+      530,
+      531,
+      534,
+      539,
+      540,
+      541,
+      551,
+      557,
+      559,
+      561,
+      562,
+      563,
+      564,
+      567,
+      570,
+      571,
+      572,
+      573,
+      574,
+      575,
+      580,
+      582,
+      585,
+      586,
+      601,
+      602,
+      603,
+      605,
+      606,
+      607,
+      608,
+      609,
+      610,
+      612,
+      614,
+      615,
+      616,
+      617,
+      618,
+      619,
+      620,
+      623,
+      626,
+      628,
+      629,
+      630,
+      631,
+      636,
+      641,
+      646,
+      650,
+      651,
+      656,
+      657,
+      659,
+      660,
+      661,
+      662,
+      667,
+      669,
+      678,
+      680,
+      681,
+      682,
+      689,
+      701,
+      702,
+      703,
+      704,
+      706,
+      707,
+      708,
+      712,
+      713,
+      714,
+      715,
+      716,
+      717,
+      718,
+      719,
+      720,
+      724,
+      725,
+      726,
+      727,
+      728,
+      730,
+      731,
+      732,
+      734,
+      737,
+      740,
+      743,
+      747,
+      754,
+      757,
+      760,
+      762,
+      763,
+      765,
+      769,
+      770,
+      771,
+      772,
+      773,
+      774,
+      775,
+      779,
+      781,
+      785,
+      786,
+      787,
+      801,
+      802,
+      803,
+      804,
+      805,
+      806,
+      808,
+      810,
+      812,
+      813,
+      814,
+      815,
+      816,
+      817,
+      818,
+      820,
+      826,
+      828,
+      830,
+      831,
+      832,
+      838,
+      840,
+      843,
+      845,
+      847,
+      848,
+      850,
+      854,
+      856,
+      857,
+      858,
+      859,
+      860,
+      862,
+      863,
+      864,
+      865,
+      870,
+      872,
+      878,
+      901,
+      903,
+      904,
+      906,
+      907,
+      908,
+      909,
+      910,
+      912,
+      913,
+      914,
+      915,
+      916,
+      917,
+      918,
+      919,
+      920,
+      925,
+      927,
+      928,
+      929,
+      930,
+      931,
+      934,
+      936,
+      937,
+      938,
+      940,
+      941,
+      945,
+      947,
+      949,
+      951,
+      952,
+      954,
+      956,
+      959,
+      970,
+      971,
+      972,
+      973,
+      975,
+      978,
+      979,
+      980,
+      984,
+      985,
+      986,
+      989
+    ],
+    "trunkPrefix": "1",
+    "internationalPrefix": "011"
+  },
+  {
+    "countryName": "Uruguay",
+    "iso2": "UY",
+    "iso3": "URY",
+    "callingCode": "+598",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Uzbekistan",
+    "iso2": "UZ",
+    "iso3": "UZB",
+    "callingCode": "+998",
+    "trunkPrefix": "8",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Vanuatu",
+    "iso2": "VU",
+    "iso3": "VUT",
+    "callingCode": "+678",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Vatican City",
+    "iso2": "VA",
+    "iso3": "VAT",
+    "callingCode": "+379",
+    "trunkPrefix": null,
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Venezuela",
+    "iso2": "VE",
+    "iso3": "VEN",
+    "callingCode": "+58",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Vietnam",
+    "iso2": "VN",
+    "iso3": "VNM",
+    "callingCode": "+84",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Yemen",
+    "iso2": "YE",
+    "iso3": "YEM",
+    "callingCode": "+967",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Zambia",
+    "iso2": "ZM",
+    "iso3": "ZMB",
+    "callingCode": "+260",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  },
+  {
+    "countryName": "Zimbabwe",
+    "iso2": "ZW",
+    "iso3": "ZWE",
+    "callingCode": "+263",
+    "trunkPrefix": "0",
+    "internationalPrefix": "00"
+  }
+]

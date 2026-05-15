@@ -11,13 +11,83 @@ namespace LCSNG\Tools\CurrencyConverter;
  */
 class LCS_CurrencyConverter
 {
+    /**
+     * The selected API provider identifier.
+     *
+     * This determines which external currency exchange service will be used
+     * to retrieve live rates. Expected values include:
+     * - exchangerate-api
+     * - exchangerates-io
+     * - fasttools
+     * - currencyapi
+     * - fixer
+     *
+     * @var string
+     */
     private string $apiProvider;
+
+    /**
+     * Optional API key for providers that require authentication.
+     *
+     * If the selected provider needs a key, this value is used in requests.
+     * Otherwise it may remain null.
+     *
+     * @var string|null
+     */
     private ?string $apiKey;
+
+    /**
+     * Filepath used to store cached exchange rate responses.
+     *
+     * Cached data is reused until expiration to reduce API calls and improve performance.
+     *
+     * @var string
+     */
     private string $cacheFile;
+
+    /**
+     * Cache lifetime in seconds.
+     *
+     * Rate data stored in the cache file is considered invalid after this many seconds.
+     *
+     * @var int
+     */
     private int $cacheExpiryTime;
+
+    /**
+     * Loaded exchange rates and metadata from the chosen API provider.
+     *
+     * This array contains the parsed payload returned by the provider,
+     * including the base currency, timestamp, and per-currency rates.
+     *
+     * @var array
+     */
     private array $ratesData = [];
+
+    /**
+     * The currency code used as the base for conversions.
+     *
+     * All external rates are normalized against this currency when conversions are performed.
+     *
+     * @var string
+     */
     private string $baseCurrency;
+
+    /**
+     * Flag indicating whether logging is enabled.
+     *
+     * When true, warnings, errors, and informational messages may be written
+     * to the configured log file.
+     *
+     * @var bool
+     */
     private bool $enableLogging;
+
+    /**
+     * Path to the log file used when logging is enabled.
+     *
+     * @var string|null
+     */
     private ?string $logFile;
 
     /**
