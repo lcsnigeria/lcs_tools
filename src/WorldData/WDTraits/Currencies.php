@@ -63,6 +63,35 @@ trait Currencies
     }
 
     /**
+     * Retrieve currency data for a given ISO 4217 currency code.
+     *
+     * The lookup is case-insensitive. For example, "NGN" will match the Nigerian Naira.
+     *
+     * @param  string $currencyCode       ISO 4217 currency code (e.g. "USD", "EUR", "NGN").
+     * @param  bool   $objectifyResult    When true, returns the result as a stdClass
+     *                                   object instead of an associative array.
+     *
+     * @return array|object                Currency data as an array or stdClass object.
+     *
+     * @throws \RuntimeException           If no currency entry is found for the given code.
+     */
+    public static function getCurrencyByCode(string $currencyCode, bool $objectifyResult = false): array|object
+    {
+        $currencyCode = strtoupper($currencyCode);
+        $currenciesData = self::decodeCurrenciesFileContents(self::readCurrenciesFileContents(self::$currencyDataFile));
+
+        foreach ($currenciesData as $currency) {
+            if ($currency['currencyCode'] === $currencyCode) {
+                return $objectifyResult ? (object) $currency : $currency;
+            }
+        }
+
+        throw new \RuntimeException(
+            "Currency data not found for currency code: '$currencyCode'."
+        );
+    }
+
+    /**
      * Read and return the raw contents of a file.
      *
      * @param  string $filePath Absolute path to the target file.
