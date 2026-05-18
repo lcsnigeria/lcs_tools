@@ -55,6 +55,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         ),
         'R' =>
         array (
+            'RobThree\\Auth\\' => 14,
             'Resend\\' => 7,
         ),
         'P' =>
@@ -214,6 +215,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'ScssPhp\\ScssPhp\\' =>
         array (
             0 => __DIR__ . '/..' . '/scssphp/scssphp/src',
+        ),
+        'RobThree\\Auth\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/robthree/twofactorauth/lib',
         ),
         'Resend\\' =>
         array (

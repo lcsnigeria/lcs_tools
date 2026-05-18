@@ -22,7 +22,9 @@
         "nyholm/psr7": "^1.8",
         "resend/resend-php": "^0.18.0",
         "matomo/device-detector": "^6.4",
-        "endroid/qr-code": "^6.1"
+        "endroid/qr-code": "^6.1",
+        "robthree/twofactorauth": "^3.0",
+        "bacon/bacon-qr-code": "^3.1"
     },
     "config": {
         "allow-plugins": {

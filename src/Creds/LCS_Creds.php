@@ -6,6 +6,9 @@ use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
 
+use RobThree\Auth\TwoFactorAuth;
+use RobThree\Auth\Providers\Qr\BaconQrCodeProvider;
+
 /**
  * Class LCS_Creds
  *
@@ -19,7 +22,7 @@ class LCS_Creds {
      *
      * @param int $length The number of bytes for the secure key (default: 32).
      * @return string A securely generated key with appended structured details.
-     * @throws Exception If secure random bytes cannot be generated.
+     * @throws \Exception If secure random bytes cannot be generated.
      */
     public static function generateKey(int $length = 32): string 
     {
@@ -235,6 +238,105 @@ class LCS_Creds {
         $result = $writer->write($qrCode);
 
         return $result->getDataUri();
+    }
+
+    /**
+     * Generate RFC-compliant TOTP secret.
+     *
+     * @param string $issuer The name of the service or application
+     *                       (e.g., "LCS").
+     *
+     * @return string The generated TOTP secret key.
+     *
+     * @example
+     * $secret = $this->generateTOTPSecret('LCS');
+     */
+    public function generateTOTPSecret(
+        string $issuer
+    ): string
+    {
+        $provider = new TwoFactorAuth(
+            new BaconQrCodeProvider(),
+            $issuer
+        );
+
+        return $provider->createSecret();
+    }
+
+
+    /**
+     * Generate TOTP QR code image.
+     *
+     * @param string $issuer The name of the service or application
+     *                       displayed in the authenticator app.
+     *
+     * @param string $email The user's email address
+     *                      used as the account label.
+     *
+     * @param string $secret The user's TOTP secret key.
+     *
+     * @return string QR code image as a Data URI.
+     *
+     * @example
+     * $qr = $this->generateTOTPQRCode(
+     *     'LCS',
+     *     'user@email.com',
+     *     $secret
+     * );
+     */
+    public function generateTOTPQRCode(
+        string $issuer,
+        string $email,
+        string $secret
+    ): string
+    {
+        $provider = new TwoFactorAuth(
+            new BaconQrCodeProvider(),
+            $issuer
+        );
+
+        return $provider->getQRCodeImageAsDataUri(
+            $email,
+            $secret
+        );
+    }
+
+
+    /**
+     * Verify a TOTP code against a secret.
+     *
+     * @param string $issuer The name of the service or application
+     *                       associated with the TOTP provider.
+     *
+     * @param string $secret The user's TOTP secret key.
+     *
+     * @param string $code The TOTP code submitted by the user.
+     *
+     * @return bool True if the TOTP code is valid,
+     *              otherwise false.
+     *
+     * @example
+     * $isValid = $this->verifyTOTPCode(
+     *     'LCS',
+     *     $secret,
+     *     $code
+     * );
+     */
+    public function verifyTOTPCode(
+        string $issuer,
+        string $secret,
+        string $code
+    ): bool
+    {
+        $provider = new TwoFactorAuth(
+            new BaconQrCodeProvider(),
+            $issuer
+        );
+
+        return $provider->verifyCode(
+            $secret,
+            $code
+        );
     }
 
 
