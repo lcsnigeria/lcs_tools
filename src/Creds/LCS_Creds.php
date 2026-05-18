@@ -249,9 +249,9 @@ class LCS_Creds {
      * @return string The generated TOTP secret key.
      *
      * @example
-     * $secret = $this->generateTOTPSecret('LCS');
+     * $secret = LCS_Creds::generateTOTPSecret('LCS');
      */
-    public function generateTOTPSecret(
+    public static function generateTOTPSecret(
         string $issuer
     ): string
     {
@@ -278,13 +278,13 @@ class LCS_Creds {
      * @return string QR code image as a Data URI.
      *
      * @example
-     * $qr = $this->generateTOTPQRCode(
+     * $qr = LCS_Creds::generateTOTPQRCode(
      *     'LCS',
      *     'user@email.com',
      *     $secret
      * );
      */
-    public function generateTOTPQRCode(
+    public static function generateTOTPQRCode(
         string $issuer,
         string $email,
         string $secret
@@ -316,13 +316,13 @@ class LCS_Creds {
      *              otherwise false.
      *
      * @example
-     * $isValid = $this->verifyTOTPCode(
+     * $isValid = LCS_Creds::verifyTOTPCode(
      *     'LCS',
      *     $secret,
      *     $code
      * );
      */
-    public function verifyTOTPCode(
+    public static function verifyTOTPCode(
         string $issuer,
         string $secret,
         string $code
