@@ -1,13 +1,14 @@
 <?php
+declare(strict_types=1);
+
 namespace LCSNG\Tools\Creds;
 
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\PngWriter;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-
-use RobThree\Auth\TwoFactorAuth;
-use RobThree\Auth\Providers\Qr\BaconQrCodeProvider;
+use OTPHP\TOTP;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Output\QRGdImagePNG;
+use chillerlan\QRCode\Output\QRMarkupSVG;
 
 /**
  * Class LCS_Creds
@@ -16,7 +17,7 @@ use RobThree\Auth\Providers\Qr\BaconQrCodeProvider;
  * Uses environment variables to store keys and ensures that sensitive 
  * data is refreshed periodically to maintain security.
  */
-class LCS_Creds {
+final class LCS_Creds {
     /**
      * Generates a cryptographically secure key with structured details.
      *
@@ -216,37 +217,50 @@ class LCS_Creds {
     }
 
     /**
-     * Generate QR code image as a data URI (endroid/qr-code v6).
+     * Generate QR code image as a Data URI.
      *
-     * @param string $data - The data to encode in the QR code.
-     * @return string - The QR code image as a data URI.
+     * Supports:
+     * - URLs
+     * - Emails
+     * - Text
+     * - OTP URIs
+     * - Payment payloads
+     * - Custom application data
      *
-     * Usage:
-     * <img src="<?= $qrImage ?>" alt="2FA QR Code">
+     * @param string $data The data to encode.
+     *
+     * @return string QR code SVG Data URI.
+     *
+     * @example
+     * $qr = LCS_Creds::generateQRCodeDataUri(
+     *     'https://lcs.ng'
+     * );
+     *
+     * echo '<img src="' . $qr . '">';
      */
-    public static function generateQRCodeDataUri(string $data): string
+    public static function generateQRCodeDataUri(
+        string $data
+    ): string
     {
-        $qrCode = new QrCode(
-            data: $data,
-            encoding: new Encoding('UTF-8'),
-            errorCorrectionLevel: ErrorCorrectionLevel::Low,
-            size: 200,
-            margin: 10
-        );
+        $options = new QROptions([
+            'outputInterface' => QRMarkupSVG::class,
+            'eccLevel'        => EccLevel::H,
+            'scale'           => 5,
+        ]);
 
-        $writer = new PngWriter();
-        $result = $writer->write($qrCode);
+        $svg = (new QRCode($options))
+            ->render($data);
 
-        return $result->getDataUri();
+        return 'data:image/svg+xml;base64,'
+            . base64_encode($svg);
     }
 
     /**
      * Generate RFC-compliant TOTP secret.
      *
-     * @param string $issuer The name of the service or application
-     *                       (e.g., "LCS").
+     * @param string $issuer The application/service name.
      *
-     * @return string The generated TOTP secret key.
+     * @return string The generated TOTP secret.
      *
      * @example
      * $secret = LCS_Creds::generateTOTPSecret('LCS');
@@ -255,27 +269,28 @@ class LCS_Creds {
         string $issuer
     ): string
     {
-        $provider = new TwoFactorAuth(
-            new BaconQrCodeProvider(),
-            $issuer
-        );
+        $totp = TOTP::create();
 
-        return $provider->createSecret();
+        $totp->setIssuer($issuer);
+
+        return $totp->getSecret();
     }
 
-
     /**
-     * Generate TOTP QR code image.
+     * Generate TOTP QR code as a Data URI.
      *
-     * @param string $issuer The name of the service or application
-     *                       displayed in the authenticator app.
+     * Compatible with:
+     * - Google Authenticator
+     * - Microsoft Authenticator
+     * - Authy
+     * - 1Password
+     * - Bitwarden
      *
-     * @param string $email The user's email address
-     *                      used as the account label.
+     * @param string $issuer The application/service name.
+     * @param string $email  The user's email address.
+     * @param string $secret The user's TOTP secret.
      *
-     * @param string $secret The user's TOTP secret key.
-     *
-     * @return string QR code image as a Data URI.
+     * @return string SVG QR code Data URI.
      *
      * @example
      * $qr = LCS_Creds::generateTOTPQRCode(
@@ -283,6 +298,8 @@ class LCS_Creds {
      *     'user@email.com',
      *     $secret
      * );
+     *
+     * echo '<img src="' . $qr . '" alt="2FA QR Code">';
      */
     public static function generateTOTPQRCode(
         string $issuer,
@@ -290,30 +307,47 @@ class LCS_Creds {
         string $secret
     ): string
     {
-        $provider = new TwoFactorAuth(
-            new BaconQrCodeProvider(),
-            $issuer
-        );
+        $totp = TOTP::create($secret);
 
-        return $provider->getQRCodeImageAsDataUri(
-            $email,
-            $secret
-        );
+        $totp->setLabel($email);
+        $totp->setIssuer($issuer);
+
+        $qrOptions = new QROptions([
+            /**
+             * SVG output:
+             * - no Imagick dependency
+             * - lightweight
+             * - scalable
+             * - production-friendly
+             */
+            'outputInterface' => QRMarkupSVG::class,
+
+            /**
+             * Higher ECC for better scan reliability.
+             */
+            'eccLevel' => EccLevel::H,
+
+            /**
+             * QR dimensions.
+             */
+            'scale' => 5,
+        ]);
+
+        $svg = (new QRCode($qrOptions))
+            ->render($totp->getProvisioningUri());
+
+        return 'data:image/svg+xml;base64,'
+            . base64_encode($svg);
     }
 
-
     /**
-     * Verify a TOTP code against a secret.
+     * Verify a TOTP code.
      *
-     * @param string $issuer The name of the service or application
-     *                       associated with the TOTP provider.
+     * @param string $issuer The application/service name.
+     * @param string $secret The user's TOTP secret.
+     * @param string $code   The TOTP code submitted by the user.
      *
-     * @param string $secret The user's TOTP secret key.
-     *
-     * @param string $code The TOTP code submitted by the user.
-     *
-     * @return bool True if the TOTP code is valid,
-     *              otherwise false.
+     * @return bool True if valid, otherwise false.
      *
      * @example
      * $isValid = LCS_Creds::verifyTOTPCode(
@@ -328,16 +362,25 @@ class LCS_Creds {
         string $code
     ): bool
     {
-        $provider = new TwoFactorAuth(
-            new BaconQrCodeProvider(),
-            $issuer
-        );
+        $totp = TOTP::create($secret);
 
-        return $provider->verifyCode(
-            $secret,
-            $code
+        $totp->setIssuer($issuer);
+
+        /**
+         * Small clock drift tolerance.
+         *
+         * Accepts:
+         * - previous window
+         * - current window
+         * - next window
+         *
+         * Helps avoid false negatives
+         * from slight device/server time drift.
+         */
+        return $totp->verify(
+            $code,
+            null,
+            1
         );
     }
-
-
 }

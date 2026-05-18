@@ -23,8 +23,8 @@
         "resend/resend-php": "^0.18.0",
         "matomo/device-detector": "^6.4",
         "endroid/qr-code": "^6.1",
-        "robthree/twofactorauth": "^3.0",
-        "bacon/bacon-qr-code": "^3.1"
+        "spomky-labs/otphp": "^11.4",
+        "chillerlan/php-qrcode": "^6.0"
     },
     "config": {
         "allow-plugins": {

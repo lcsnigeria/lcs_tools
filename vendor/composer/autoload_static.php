@@ -25,6 +25,11 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
     );
 
     public static $prefixLengthsPsr4 = array (
+        'c' =>
+        array (
+            'chillerlan\\Settings\\' => 20,
+            'chillerlan\\QRCode\\' => 18,
+        ),
         'W' =>
         array (
             'Webmozart\\Assert\\' => 17,
@@ -55,7 +60,6 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         ),
         'R' =>
         array (
-            'RobThree\\Auth\\' => 14,
             'Resend\\' => 7,
         ),
         'P' =>
@@ -67,7 +71,12 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'Psr\\Container\\' => 14,
             'Psr\\Clock\\' => 10,
             'PhpOption\\' => 10,
+            'ParagonIE\\ConstantTime\\' => 23,
             'PHPMailer\\PHPMailer\\' => 20,
+        ),
+        'O' =>
+        array (
+            'OTPHP\\' => 6,
         ),
         'N' =>
         array (
@@ -128,6 +137,14 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
     );
 
     public static $prefixDirsPsr4 = array (
+        'chillerlan\\Settings\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/chillerlan/php-settings-container/src',
+        ),
+        'chillerlan\\QRCode\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/chillerlan/php-qrcode/src',
+        ),
         'Webmozart\\Assert\\' =>
         array (
             0 => __DIR__ . '/..' . '/webmozart/assert/src',
@@ -216,10 +233,6 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/scssphp/scssphp/src',
         ),
-        'RobThree\\Auth\\' =>
-        array (
-            0 => __DIR__ . '/..' . '/robthree/twofactorauth/lib',
-        ),
         'Resend\\' =>
         array (
             0 => __DIR__ . '/..' . '/resend/resend-php/src',
@@ -253,9 +266,17 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/phpoption/phpoption/src/PhpOption',
         ),
+        'ParagonIE\\ConstantTime\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/paragonie/constant_time_encoding/src',
+        ),
         'PHPMailer\\PHPMailer\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
+        ),
+        'OTPHP\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/spomky-labs/otphp/src',
         ),
         'Nyholm\\Psr7\\' =>
         array (
