@@ -333,11 +333,8 @@ final class LCS_Creds {
             'scale' => 5,
         ]);
 
-        $svg = (new QRCode($qrOptions))
+        return (new QRCode($qrOptions))
             ->render($totp->getProvisioningUri());
-
-        return 'data:image/svg+xml;base64,'
-            . base64_encode($svg);
     }
 
     /**
