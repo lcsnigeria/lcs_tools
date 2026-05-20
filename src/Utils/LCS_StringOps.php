@@ -403,7 +403,7 @@ class LCS_StringOps {
      * - Adds thousands separators (comma) and decimal point (dot).
      * - Optionally trims trailing zeros after decimal point.
      *
-     * @param  float|int  $amount       The numeric amount to format.
+     * @param  float|int|string  $amount       The numeric amount to format.
      * @param  string     $symbol       Currency symbol to prefix (default: `"₦"`).
      * @param  int|null   $precision    Decimal places (null = auto-trim, default: `2`).
      * @return string                   The formatted amount string (e.g. "₦12,500.50").
@@ -420,14 +420,14 @@ class LCS_StringOps {
      * ```
      */
     public static function formatAmount(
-        float|int $amount,
+        float|int|string $amount,
         string $symbol = '₦',
         ?int $precision = 2
     ): string {
+        $amount = (float) $amount;
         $formatted = is_null($precision)
             ? rtrim(rtrim(number_format((float) $amount, 2, '.', ','), '0'), '.')
             : number_format((float) $amount, $precision, '.', ',');
-
         return $symbol . $formatted;
     }
 
@@ -527,13 +527,12 @@ class LCS_StringOps {
      * @param array $pages An optional array of page paths to include in the sitemap. 
      *                     If empty, only the homepage will be included.
      * @return string|false The XML string representing the sitemap, or false if validation fails.
-     * @throws Exception if the base URL is invalid or if any page in the array is not a string.
+     * @throws \Exception if the base URL is invalid or if any page in the array is not a string.
      */
     public static function generateSitemap($base_url, $pages = []) {
         // Validate the base URL
         if (!filter_var($base_url, FILTER_VALIDATE_URL)) {
             throw new \Exception("Invalid base URL: $base_url");
-            return false;
         }
 
         // Validate that all pages are strings
@@ -541,7 +540,6 @@ class LCS_StringOps {
             foreach ($pages as $page) {
                 if (!is_string($page)) {
                     throw new \Exception("Invalid page value: All pages must be strings.");
-                    return false;
                 }
             }
         }

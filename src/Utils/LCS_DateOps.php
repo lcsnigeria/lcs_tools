@@ -216,6 +216,9 @@ class LCS_DateOps {
      * Get the number of days in the current month.
      *
      * @return int The number of days in the current month.
+     * 
+     * Example usage:
+     *  echo ::getDaysInMonth(); // Outputs: 30 (for April)
      */
     public static function getDaysInMonth(): int {
         return (int)date('t');
@@ -226,6 +229,11 @@ class LCS_DateOps {
      *
      * @param int|null $year Optional. The year to check. If null, the current year is used.
      * @return bool True if the given year or the current year is a leap year, false otherwise.
+     * 
+     * Example usage:
+     *  ::isLeapYear(2024); // returns true (2024 is a leap year)
+     *  ::isLeapYear(2025); // returns false (2025 is not a leap year)
+     *  ::isLeapYear();     // returns true or false based on the current year
      */
     public static function isLeapYear(?int $year = null): bool {
         $year = $year ?? (int)self::getYear();
@@ -242,6 +250,10 @@ class LCS_DateOps {
      * @param string $date2 The second date in "YYYY-MM-DD" format.
      * @param bool $compareWithTime Optional. If true, returns the difference in seconds; defaults to false (days).
      * @return int The absolute difference between the two dates, in days or seconds based on $compareWithTime.
+     * 
+     * Example usage:
+     *  $days = ::getDateDifference('2025-11-19', '2025-11-25'); // returns 6 (days)
+     *  $seconds = ::getDateDifference('2025-11-19 14:38:30', '2025-11-25 10:00:00', true); // returns total seconds between the two datetimes
      */
     public static function getDateDifference(string $date1, string $date2, bool $compareWithTime = false): int {
         $datetime1 = new \DateTime($date1);
@@ -265,8 +277,8 @@ class LCS_DateOps {
      * @param string $date2 Second date (e.g., '2025-11-25 10:00:00')
      * @return int Absolute number of days between the dates
      *
-     * Sample usage:
-     *   $days = getDaysDifference('2025-11-19 14:38:30', '2025-11-25 10:00:00');
+     * Example usage:
+     *   $days = ::getDaysDifference('2025-11-19 14:38:30', '2025-11-25 10:00:00');
      */
     public function getDaysDifference(string $date1, string $date2): int {
         $dt1 = new \DateTime($date1);
@@ -287,6 +299,10 @@ class LCS_DateOps {
      * @param string $date1 The first date in "YYYY-MM-DD" format.
      * @param string $date2 The second date in "YYYY-MM-DD" format.
      * @return int The absolute difference between the two dates in seconds.
+     * 
+     * Example usage:
+     *  $seconds = ::getTimeDifference('2025-11-19 14:38:30', '2025-11-25 10:00:00');
+     *  This will return the total number of seconds between the two datetime values.
      */
     public static function getTimeDifference(string $date1, string $date2): int {
         return self::getDateDifference($date1, $date2, true);
@@ -298,6 +314,10 @@ class LCS_DateOps {
      * @param string $date The starting date in "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format.
      * @param int $days The number of days to add.
      * @return string The resulting date in "YYYY-MM-DD" format (if no time provided) or "YYYY-MM-DD HH:MM:SS" (if time included).
+     * 
+     * Example usage:
+     *  echo ::addDaysToDate('2025-05-15', 5); // Outputs: '2025-05-20'
+     *  echo ::addDaysToDate('2025-05-15 14:30:00', 3); // Outputs: '2025-05-18 14:30:00'
      */
     public static function addDaysToDate(string $date, int $days): string {
         $datetime = new \DateTime($date);
@@ -312,12 +332,135 @@ class LCS_DateOps {
      * @param string $date The starting date in "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format.
      * @param int $days The number of days to subtract.
      * @return string The resulting date in "YYYY-MM-DD" format (if no time provided) or "YYYY-MM-DD HH:MM:SS" (if time included).
+     * 
+     * Example usage:
+     *   echo ::subtractDaysFromDate('2025-05-15', 5); // Outputs: '2025-05-10'
+     *   echo ::subtractDaysFromDate('2025-05-15 14:30:00', 3); // Outputs: '2025-05-12 14:30:00'
      */
     public static function subtractDaysFromDate(string $date, int $days): string {
         $datetime = new \DateTime($date);
         $datetime->modify("-$days days");
         // Check if original input included time; adjust output format accordingly
         return strpos($date, ':') !== false ? $datetime->format('Y-m-d H:i:s') : $datetime->format('Y-m-d');
+    }
+
+    /**
+     * Get age from a date of birth string.
+     *
+     * Supported formats:
+     *  - DD/MM/YYYY
+     *  - DD-MM-YYYY
+     *  - DD|MM|YYYY
+     *  - MM/YYYY
+     *  - MM-YYYY
+     *  - MM|YYYY
+     *  - YYYY
+     *
+     * Missing values:
+     *  - Missing day   => defaults to 1
+     *  - Missing month => defaults to January (1)
+     *
+     * @param string $date Date of birth string.
+     *
+     * @return int Age in years.
+     *
+     * @throws \InvalidArgumentException If the date format is invalid.
+     *
+     * @example
+     *  echo ::getAge('21/04/2001'); // 25
+     *  echo ::getAge('04/2001');    // 25
+     *  echo ::getAge('21-04-2001'); // 25
+     *  echo ::getAge('04-2001');    // 25
+     *  echo ::getAge('21,04,2001'); // 25
+     *  echo ::getAge('04.2001');    // 25
+     *  echo ::getAge('2001');       // 25
+     */
+    public static function getAge(string $date): int {
+        $date = trim($date);
+
+        if ($date === '') {
+            throw new \InvalidArgumentException('Date of birth cannot be empty.');
+        }
+
+        /**
+         * Normalize supported separators to "/"
+         *
+         * Supported separators:
+         *  - /
+         *  - -
+         *  - |
+         *  - ,
+         *  - .
+         */
+        $normalized = preg_replace('/[\/\-|,.]+/', '/', $date);
+
+        $parts = array_values(
+            array_filter(
+                explode('/', $normalized),
+                static fn($v) => trim($v) !== ''
+            )
+        );
+
+        $day   = 1;
+        $month = 1;
+        $year  = null;
+
+        /**
+         * YYYY
+         */
+        if (count($parts) === 1) {
+            $year = (int)$parts[0];
+        }
+
+        /**
+         * MM/YYYY
+         */
+        elseif (count($parts) === 2) {
+            [$month, $year] = array_map('intval', $parts);
+        }
+
+        /**
+         * DD/MM/YYYY
+         */
+        elseif (count($parts) === 3) {
+            [$day, $month, $year] = array_map('intval', $parts);
+        }
+
+        else {
+            throw new \InvalidArgumentException(
+                "Invalid date format: '{$date}'."
+            );
+        }
+
+        /**
+         * Basic validation
+         */
+        if (
+            $year < 1 ||
+            $month < 1 || $month > 12 ||
+            $day < 1 || $day > 31
+        ) {
+            throw new \InvalidArgumentException(
+                "Invalid date values: '{$date}'."
+            );
+        }
+
+        /**
+         * Validate actual calendar date
+         */
+        if (!checkdate($month, $day, $year)) {
+            throw new \InvalidArgumentException(
+                "Invalid calendar date: '{$date}'."
+            );
+        }
+
+        $birthDate = new \DateTime(
+            sprintf('%04d-%02d-%02d', $year, $month, $day)
+        );
+
+        $today = new \DateTime('today');
+
+        return (int)$birthDate->diff($today)->y;
     }
 
 }

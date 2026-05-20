@@ -24,7 +24,9 @@
         "matomo/device-detector": "^6.4",
         "endroid/qr-code": "^6.1",
         "spomky-labs/otphp": "^11.4",
-        "chillerlan/php-qrcode": "^6.0"
+        "chillerlan/php-qrcode": "^6.0",
+        "yooper/php-text-analysis": "^1.9",
+        "edgaras/strsim": "^1.1"
     },
     "config": {
         "allow-plugins": {
