@@ -351,39 +351,67 @@ class LCS_DateOps {
      *  - DD/MM/YYYY
      *  - DD-MM-YYYY
      *  - DD|MM|YYYY
+     *  - DD,MM,YYYY
+     *  - DD.MM.YYYY
+     *  - YYYY/MM/DD
+     *  - YYYY-MM-DD
+     *  - YYYY|MM|DD
+     *  - YYYY,MM,DD
+     *  - YYYY.MM.DD
      *  - MM/YYYY
      *  - MM-YYYY
      *  - MM|YYYY
+     *  - MM,YYYY
+     *  - MM.YYYY
      *  - YYYY
      *
      * Missing values:
      *  - Missing day   => defaults to 1
      *  - Missing month => defaults to January (1)
      *
-     * @param string $date Date of birth string.
+     * Features:
+     *  - Automatically normalizes supported separators
+     *  - Supports both DMY and YMD full-date formats
+     *  - Validates real calendar dates
+     *  - Prevents invalid/future birth dates
+     *  - Locale-safe parsing
      *
-     * @return int Age in years.
+     * @param string $date
+     *      Date of birth string.
      *
-     * @throws \InvalidArgumentException If the date format is invalid.
+     * @return int
+     *      Age in years.
+     *
+     * @throws \InvalidArgumentException
+     *      If the date format or values are invalid.
      *
      * @example
-     *  echo ::getAge('21/04/2001'); // 25
-     *  echo ::getAge('04/2001');    // 25
-     *  echo ::getAge('21-04-2001'); // 25
-     *  echo ::getAge('04-2001');    // 25
-     *  echo ::getAge('21,04,2001'); // 25
-     *  echo ::getAge('04.2001');    // 25
-     *  echo ::getAge('2001');       // 25
+     *  echo ::getAge('21/04/2001');
+     *  // 25
+     *
+     * @example
+     *  echo ::getAge('2001-04-21');
+     *  // 25
+     *
+     * @example
+     *  echo ::getAge('04/2001');
+     *  // 25
+     *
+     * @example
+     *  echo ::getAge('2001');
+     *  // 25
      */
     public static function getAge(string $date): int {
         $date = trim($date);
 
         if ($date === '') {
-            throw new \InvalidArgumentException('Date of birth cannot be empty.');
+            throw new \InvalidArgumentException(
+                'Date of birth cannot be empty.'
+            );
         }
 
         /**
-         * Normalize supported separators to "/"
+         * Normalize supported separators to "-"
          *
          * Supported separators:
          *  - /
@@ -392,12 +420,20 @@ class LCS_DateOps {
          *  - ,
          *  - .
          */
-        $normalized = preg_replace('/[\/\-|,.]+/', '/', $date);
+        $normalized = preg_replace('/[\/|,.]+/', '-', $date);
 
+        /**
+         * Remove duplicate separators
+         */
+        $normalized = preg_replace('/-+/', '-', $normalized);
+
+        /**
+         * Split into parts
+         */
         $parts = array_values(
             array_filter(
-                explode('/', $normalized),
-                static fn($v) => trim($v) !== ''
+                explode('-', $normalized),
+                static fn($value) => trim($value) !== ''
             )
         );
 
@@ -409,21 +445,65 @@ class LCS_DateOps {
          * YYYY
          */
         if (count($parts) === 1) {
+            if (!preg_match('/^\d{4}$/', $parts[0])) {
+                throw new \InvalidArgumentException(
+                    "Invalid year format: '{$date}'."
+                );
+            }
+
             $year = (int)$parts[0];
         }
 
         /**
-         * MM/YYYY
+         * MM-YYYY
          */
         elseif (count($parts) === 2) {
             [$month, $year] = array_map('intval', $parts);
         }
 
         /**
-         * DD/MM/YYYY
+         * Full date
+         *
+         * Supports:
+         *  - DD-MM-YYYY
+         *  - YYYY-MM-DD
          */
         elseif (count($parts) === 3) {
-            [$day, $month, $year] = array_map('intval', $parts);
+            /**
+             * Detect format safely
+             */
+            if (strlen($parts[0]) === 4) {
+                $formats = ['Y-m-d'];
+            } else {
+                $formats = ['d-m-Y'];
+            }
+
+            $birthDate = null;
+
+            foreach ($formats as $format) {
+                $parsed = \DateTime::createFromFormat(
+                    $format,
+                    $normalized
+                );
+
+                if (
+                    $parsed instanceof \DateTime &&
+                    $parsed->format($format) === $normalized
+                ) {
+                    $birthDate = $parsed;
+                    break;
+                }
+            }
+
+            if (!$birthDate) {
+                throw new \InvalidArgumentException(
+                    "Invalid date format: '{$date}'."
+                );
+            }
+
+            $day   = (int)$birthDate->format('d');
+            $month = (int)$birthDate->format('m');
+            $year  = (int)$birthDate->format('Y');
         }
 
         else {
@@ -433,7 +513,7 @@ class LCS_DateOps {
         }
 
         /**
-         * Basic validation
+         * Validate numeric ranges
          */
         if (
             $year < 1 ||
@@ -454,12 +534,29 @@ class LCS_DateOps {
             );
         }
 
-        $birthDate = new \DateTime(
-            sprintf('%04d-%02d-%02d', $year, $month, $day)
-        );
+        /**
+         * Build final birth date object
+         */
+        if (!isset($birthDate)) {
+            $birthDate = new \DateTime(
+                sprintf('%04d-%02d-%02d', $year, $month, $day)
+            );
+        }
 
+        /**
+         * Prevent future DOBs
+         */
         $today = new \DateTime('today');
 
+        if ($birthDate > $today) {
+            throw new \InvalidArgumentException(
+                "Date of birth cannot be in the future."
+            );
+        }
+
+        /**
+         * Calculate age
+         */
         return (int)$birthDate->diff($today)->y;
     }
 
