@@ -1,6 +1,13 @@
 <?php
 namespace LCSNG\Tools\Utils;
 
+/**
+ * Class LCS_StringOps
+ *
+ * A collection of static methods for string manipulation and analysis.
+ *
+ * @package LCSNG\Tools\Utils
+ */
 class LCS_StringOps {
     /**
      * Capitalizes each word in a string (e.g., "united states" → "United States").

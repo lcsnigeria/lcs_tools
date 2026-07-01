@@ -10,7 +10,7 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
  * compressing, extracting, and reading files and archives. Supports formats such as ZIP, RAR, and TAR.GZ,
  * along with file metadata validation and management.
  *
- * @property array|null $file Stores uploaded file data from the $_FILES array.
+ * @property array|null $files Stores uploaded file data from the $_FILES array.
  * @property string|null $file_path Direct path to the file on the system.
  * @property string|null $path Target directory path for file operations (e.g., upload, compression).
  * @property int $previous_time_limit Stores the previous PHP script execution time limit, allowing restoration upon class destruction.
@@ -50,14 +50,14 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
 class LCS_FileManager {
 
     /**
-     * @var array $file
+     * @var array $files
      * Uploaded file(s) from the `$_FILES` global variable.
      * - For single file uploads: An associative array containing details of the uploaded file.
      * - For multiple file uploads: An associative array where each key (`name`, `type`, `tmp_name`, `error`, `size`) maps to an array of corresponding values.
      * 
      * Example (Single File Upload):
      * ```php
-     * $file = [
+     * $files = [
      *     'name' => 'file1.zip',
      *     'type' => 'application/zip',
      *     'tmp_name' => '/tmp/phpA1.tmp',
@@ -68,7 +68,7 @@ class LCS_FileManager {
      * 
      * Example (Multiple Files Upload - Before Normalization):
      * ```php
-     * $file = [
+     * $files = [
      *     'name' => ['file1.zip', 'file2.zip'],
      *     'type' => ['application/zip', 'application/zip'],
      *     'tmp_name' => ['/tmp/phpA1.tmp', '/tmp/phpB2.tmp'],
@@ -79,7 +79,7 @@ class LCS_FileManager {
      * 
      * Example (After Normalization for Multiple Files):
      * ```php
-     * $file = [
+     * $files = [
      *     [
      *         'name' => 'file1.zip',
      *         'type' => 'application/zip',
@@ -97,11 +97,11 @@ class LCS_FileManager {
      * ];
      * ```
      */
-    public $file;
+    public $files;
 
     /**
      * @var string $path
-     * The target directory where files will be moved, downloaded, uploaded or managed.
+     * The target directory where files will be moved, uploaded or managed.
      * Must be a valid, writable directory path.
      * Example:
      * - `/var/www/uploads/profile_pictures/`
@@ -118,7 +118,7 @@ class LCS_FileManager {
     public $file_path;
 
     /**
-     * @var string|null $file_name
+     * @var array|string|null $file_name
      * The name to set for the file when uploading.
      * This property is useful when renaming files during the upload process.
      * Example:
@@ -339,26 +339,26 @@ class LCS_FileManager {
      * This method checks if the file size is within the specified limits.
      * If no file is provided, it uses the default file from the class properties.
      *
-     * @param string|array|null $file The file or array of files to validate.
+     * @param string|array|null $files The file or array of files to validate.
      * @param int|null $min_file_size The minimum file size in bytes. Default is null (no minimum).
      * @param int|null $max_file_size The maximum file size in bytes. Default is null (no maximum).
      * @throws \Exception If the file size is out of bounds or invalid.
      */
-    public function validateFileSize($file = null, $min_file_size = null, $max_file_size = null) {
-        if (is_null($file) || empty($file)) {
-            if ($this->file) {
-                $file = $this->file;
+    public function validateFileSize($files = null, $min_file_size = null, $max_file_size = null) {
+        if (is_null($files) || empty($files)) {
+            if ($this->files) {
+                $files = $this->files;
             } elseif ($this->file_path) {
-                $file = $this->file_path;
+                $files = $this->file_path;
             } else {
                 throw new \Exception("No file parameter provided and no default file available.");
             }
         }
 
         // Check if the file size is within the specified limits
-        if (is_array($file)) {
-            $file = $this->normalizeFiles($file);
-            foreach ($file as $f) {
+        if (is_array($files)) {
+            $files = $this->normalizeFiles($files);
+            foreach ($files as $f) {
                 if (!isset($f['size'])) {
                     throw new \Exception("Invalid file array provided.");
                 }
@@ -366,13 +366,13 @@ class LCS_FileManager {
                     throw new \Exception("File size out of bounds: " . $f['name']);
                 }
             }
-        } elseif (is_string($file)) {
-            if (!file_exists($file)) {
-                throw new \Exception("File does not exist: " . $file);
+        } elseif (is_string($files)) {
+            if (!file_exists($files)) {
+                throw new \Exception("File does not exist: " . $files);
             }
-            $fileSize = filesize($file);
+            $fileSize = filesize($files);
             if ($fileSize < ($min_file_size ?? $this->min_file_size) || $fileSize > ($max_file_size ?? $this->max_file_size)) {
-                throw new \Exception("File size out of bounds: " . basename($file));
+                throw new \Exception("File size out of bounds: " . basename($files));
             }
         } else {
             throw new \Exception("Invalid file parameter provided.");
@@ -410,37 +410,37 @@ class LCS_FileManager {
     /**
      * Retrieves the file name from a given file path or file array.
      *
-     * @param string|array|null $file The file path or file array.
+     * @param string|array|null $files The file path or file array.
      * @param bool $withExtension Whether to include the file extension in the returned name.
      * @return string|array The file name or array of them if multiple files are provided.
      * @throws \Exception If the file parameter is invalid or the file does not exist.
      */
-    public function getFileName($file = null, $withExtension = false) {
-        if (is_null($file) || empty($file)) {
-            if ($this->file) {
-                $file = $this->file;
+    public function getFileName($files = null, $withExtension = false) {
+        if (is_null($files) || empty($files)) {
+            if ($this->files) {
+                $files = $this->files;
             } elseif ($this->file_path) {
-                $file = $this->file_path;
+                $files = $this->file_path;
             } else {
                 throw new \Exception("No file parameter provided and no default file available.");
             }
         }
 
         $fileNames = '';
-        if (is_array($file)) {
+        if (is_array($files)) {
             $fileNames = [];
-            $file = $this->normalizeFiles($file);
-            foreach ($file as $f) {
+            $files = $this->normalizeFiles($files);
+            foreach ($files as $f) {
                 if (!isset($f['name'])) {
                     throw new \Exception("Invalid file array provided.");
                 }
                 $fileNames[] = $withExtension ? basename($f['name']) : pathinfo($f['name'], PATHINFO_FILENAME);
             }
-        } elseif (is_string($file)) {
-            if (!file_exists($file)) {
-                throw new \Exception("File does not exist: " . $file);
+        } elseif (is_string($files)) {
+            if (!file_exists($files)) {
+                throw new \Exception("File does not exist: " . $files);
             }
-            $fileNames = $withExtension ? basename($file) : pathinfo($file, PATHINFO_FILENAME);
+            $fileNames = $withExtension ? basename($files) : pathinfo($files, PATHINFO_FILENAME);
         } else {
             throw new \Exception("Invalid file parameter provided.");
         }
@@ -456,14 +456,14 @@ class LCS_FileManager {
      * before returning the content (useful for template substitutions or config token injection).
      *
      * ⚙️ Behavior:
-     * - If `$file` is `null`, it automatically falls back to `$this->file` or `$this->file_path`.
+     * - If `$files` is `null`, it automatically falls back to `$this->files` or `$this->file_path`.
      * - If `$stream` is `true`, reads files progressively via `streamFileContents()` instead of loading them fully.
      * - If `$asBase64` is `true`, returns file data encoded in Base64.
      * - If `$replacements` is provided and `$asBase64` is `false`, performs `str_replace()` before returning the output.
      *
-     * @param string|array|null $file
+     * @param string|array|null $files
      *     File path or normalized file array.  
-     *     If `null`, uses `$this->file` or `$this->file_path`.
+     *     If `null`, uses `$this->files` or `$this->file_path`.
      * @param bool $stream
      *     Whether to stream contents in chunks (recommended for large files).
      * @param bool $asBase64
@@ -492,25 +492,25 @@ class LCS_FileManager {
      * ]);
      * ```
      */
-    public function getFileContents($file = null, $stream = false, $asBase64 = false, array $replacements = [])
+    public function getFileContents($files = null, $stream = false, $asBase64 = false, array $replacements = [])
     {
         // Auto-determine file input if not provided
-        if (is_null($file) || empty($file)) {
-            if (!empty($this->file)) {
-                $file = $this->file;
+        if (is_null($files) || empty($files)) {
+            if (!empty($this->files)) {
+                $files = $this->files;
             } elseif (!empty($this->file_path)) {
-                $file = $this->file_path;
+                $files = $this->file_path;
             } else {
                 throw new \Exception("No file parameter provided and no default file available.");
             }
         }
 
         // Handle multiple uploaded or listed files
-        if (is_array($file)) {
-            $file = $this->normalizeFiles($file);
+        if (is_array($files)) {
+            $files = $this->normalizeFiles($files);
             $contents = [];
 
-            foreach ($file as $f) {
+            foreach ($files as $f) {
                 $path = $f['tmp_name'] ?? null;
                 if (!$path || !file_exists($path)) {
                     throw new \Exception("File does not exist: " . ($f['name'] ?? 'unknown'));
@@ -532,14 +532,14 @@ class LCS_FileManager {
         }
 
         // Handle single file path
-        if (is_string($file)) {
-            if (!file_exists($file)) {
-                throw new \Exception("File does not exist: {$file}");
+        if (is_string($files)) {
+            if (!file_exists($files)) {
+                throw new \Exception("File does not exist: {$files}");
             }
 
             $data = $stream
-                ? $this->streamFileContents($file)
-                : file_get_contents($file);
+                ? $this->streamFileContents($files)
+                : file_get_contents($files);
 
             // Apply replacements only when not encoding
             if (!empty($replacements) && !$asBase64) {
@@ -713,11 +713,11 @@ class LCS_FileManager {
 
         $iterator = new \RecursiveIteratorIterator($filter);
 
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
+        foreach ($iterator as $files) {
+            if ($files->isFile()) {
                 $files[] = $returnFullPath
-                    ? $file->getPathname()   // Full path
-                    : $file->getFilename(); // Only filename
+                    ? $files->getPathname()   // Full path
+                    : $files->getFilename(); // Only filename
             }
         }
 
@@ -738,7 +738,7 @@ class LCS_FileManager {
      *
      * @param bool $forceConfigs Whether to force creation of the target directory if it doesn't exist.
      * @return array The names of the uploaded files.
-     * @throws Exception If any file is invalid or an upload fails.
+     * @throws \Exception If any file is invalid or an upload fails.
      */
     public function upload($forceConfigs = false) :array {
         // Check if path is provided and valid
@@ -760,12 +760,12 @@ class LCS_FileManager {
         // Update time limit for this upload process
         set_time_limit($this->time_limit);
         
-        if (!$this->file) {
+        if (!$this->files) {
             throw new \Exception("No files provided.");
         }
 
-        // Normalize $this->file to an array of files
-        $files = $this->normalizeFiles($this->file);
+        // Normalize $this->files to an array of files
+        $files = $this->normalizeFiles($this->files);
 
         // Limit the number of files
         if (count($files) > $this->file_limit) {
@@ -854,7 +854,7 @@ class LCS_FileManager {
      * Copies multiple files to a new directory.
      *
      * @return array The paths of the copied files.
-     * @throws Exception If any file path or target directory is invalid, or a copy operation fails.
+     * @throws \Exception If any file path or target directory is invalid, or a copy operation fails.
      */
     public function copy() {
         if (!$this->file_path || !$this->path) {
@@ -897,7 +897,7 @@ class LCS_FileManager {
      * Moves multiple files to a new directory.
      *
      * @return array The paths of the moved files.
-     * @throws Exception If any file path or target directory is invalid, or a move operation fails.
+     * @throws \Exception If any file path or target directory is invalid, or a move operation fails.
      */
     public function move() {
         if (!$this->file_path || !$this->path) {
@@ -940,7 +940,7 @@ class LCS_FileManager {
      * Deletes multiple files or directories.
      *
      * @return array List of successfully deleted file paths.
-     * @throws Exception If any file path is invalid or a delete operation fails.
+     * @throws \Exception If any file path is invalid or a delete operation fails.
      */
     public function delete() {
         if (!$this->file_path) {
@@ -1013,7 +1013,7 @@ class LCS_FileManager {
      *
      * @param string $new_name New name for the file.
      * @return string The new file path.
-     * @throws Exception If the file path is invalid or rename fails.
+     * @throws \Exception If the file path is invalid or rename fails.
      */
     public function rename($new_name) {
         if (!$this->file_path || !file_exists($this->file_path)) {
@@ -1036,7 +1036,7 @@ class LCS_FileManager {
      * @param string $fileName The name of the file to check.
      * @param string $fileDir The Dir where to check for the file.
      * @return bool True if the file exists, false otherwise.
-     * @throws Exception If the provided Dir is invalid.
+     * @throws \Exception If the provided Dir is invalid.
      */
     public function isFileExist($fileName, $fileDir) {
         if (empty($fileDir) || !is_dir($fileDir)) {
@@ -1053,7 +1053,7 @@ class LCS_FileManager {
      * If no $path is provided, the files are zipped and downloaded in the browser.
      *
      * @return true
-     * @throws Exception If files cannot be downloaded.
+     * @throws \Exception If files cannot be downloaded.
      */
     public function download() {
         if (!$this->file_path) {
@@ -1139,7 +1139,7 @@ class LCS_FileManager {
      * This function checks the validity of the file, sets HTTP headers based on the file's MIME type,
      * and streams the file content to the client. It supports caching headers for optimized performance.
      *
-     * @throws Exception If the file does not exist, is unsupported, or cannot be read.
+     * @throws \Exception If the file does not exist, is unsupported, or cannot be read.
      *
      * @return void Outputs the file content directly to the client and exits.
      */
@@ -1286,21 +1286,21 @@ class LCS_FileManager {
     /**
      * Extracts an archive file (ZIP, RAR, TAR.GZ) to a specified directory.
      * 
-     * The archive file is taken from the `$file` property (if available), otherwise from the `$file_path` property.
+     * The archive file is taken from the `$files` property (if available), otherwise from the `$file_path` property.
      * The extraction location is provided by the `$path` property.
      *
      * @param bool $createPath If true, the destination path will be created if it does not exist.
      * @return bool Returns true if the files were successfully extracted, false otherwise.
-     * @throws Exception If multiple files are provided, the file is invalid, extraction fails, or the destination path is not provided.
+     * @throws \Exception If multiple files are provided, the file is invalid, extraction fails, or the destination path is not provided.
      */
     public function unzipData($createPath = false) {
         // Ensure only one file is provided
-        if (isset($this->file['name']) && is_array($this->file['name'])) {
+        if (isset($this->files['name']) && is_array($this->files['name'])) {
             throw new \Exception("Only a single archive file can be processed at a time for extraction.");
         }
 
         // Determine file path
-        $archiveFilePath = $this->file ? $this->file['tmp_name'] : $this->file_path;
+        $archiveFilePath = $this->files ? $this->files['tmp_name'] : $this->file_path;
         
         // Validate archive file
         if (!$archiveFilePath || !file_exists($archiveFilePath)) {
@@ -1323,7 +1323,7 @@ class LCS_FileManager {
         }
 
         // Determine file extension
-        $fileExtension = strtolower(pathinfo($this->file['name'] ?? $this->file_path, PATHINFO_EXTENSION));
+        $fileExtension = strtolower(pathinfo($this->files['name'] ?? $this->file_path, PATHINFO_EXTENSION));
 
         // Extract based on file type
         switch ($fileExtension) {
@@ -1341,7 +1341,7 @@ class LCS_FileManager {
      *
      * @param string $filePath Path to the ZIP file.
      * @return bool True if extraction is successful.
-     * @throws Exception If extraction fails.
+     * @throws \Exception If extraction fails.
      */
     private function extractZip($filePath) {
         $zip = new \ZipArchive();
@@ -1363,7 +1363,7 @@ class LCS_FileManager {
      *
      * @param string $filePath Path to the TAR.GZ file.
      * @return bool True if extraction is successful.
-     * @throws Exception If extraction fails.
+     * @throws \Exception If extraction fails.
      */
     private function extractTarGz($filePath) {
         if (!class_exists('PharData')) {
@@ -1389,16 +1389,16 @@ class LCS_FileManager {
      * 
      * @param string|array|null $fileNames A single filename or an array of filenames to retrieve contents from the archive.
      * @return array Associative array with archive details and file contents (if requested).
-     * @throws Exception If multiple files are provided, the archive file cannot be found, opened, or if there is an issue reading its contents.
+     * @throws \Exception If multiple files are provided, the archive file cannot be found, opened, or if there is an issue reading its contents.
      */
     public function readArchive($fileNames = null) {
-        if (isset($this->file['name']) && is_array($this->file['name'])) {
+        if (isset($this->files['name']) && is_array($this->files['name'])) {
             throw new \Exception("Only a single archive file can be processed at a time for reading.");
         }
 
         $uploadedFile = null;
-        if ($this->file && !empty($this->file)) {
-            $uploadedFile = $this->normalizeFiles($this->file)[0];
+        if ($this->files && !empty($this->files)) {
+            $uploadedFile = $this->normalizeFiles($this->files)[0];
         }
 
         $archivePath = $uploadedFile ? $uploadedFile['tmp_name'] : $this->file_path;
@@ -1423,6 +1423,9 @@ class LCS_FileManager {
 
     /**
      * Handles ZIP archives using ZipArchive and retrieves specified file contents.
+     * 
+     * @param string $archivePath Path to the ZIP archive.
+     * @param array $fileNames List of filenames to retrieve contents from the archive.
      */
     private function readZipArchive($archivePath, $fileNames) {
         $zip = new \ZipArchive();
@@ -1465,6 +1468,9 @@ class LCS_FileManager {
 
     /**
      * Handles TAR and TAR.GZ archives using PharData and retrieves specified file contents.
+     * 
+     * @param string $archivePath Path to the TAR archive.
+     * @param array $fileNames List of filenames to retrieve contents from the archive.
      */
     private function readTarArchive($archivePath, $fileNames) {
         if (!class_exists('PharData')) {
@@ -1557,17 +1563,17 @@ class LCS_FileManager {
     /**
      * Compresses a file or multiple files using gzip to reduce their size.
      *
-     * If $file is provided, it compresses the uploaded file(s). 
-     * If $file is not provided, it uses the file at $file_path.
+     * If $files is provided, it compresses the uploaded file(s). 
+     * If $files is not provided, it uses the file at $file_path.
      *
      * @return array|string The path(s) of the compressed file(s).
-     * @throws Exception If no valid file is provided or compression fails.
+     * @throws \Exception If no valid file is provided or compression fails.
      */
     public function compress() {
-        // Check if $file is provided
-        if ($this->file) {
+        // Check if $files is provided
+        if ($this->files) {
             // Normalize the files for consistency (handling both single and multiple file uploads)
-            $files = $this->normalizeFiles($this->file);
+            $files = $this->normalizeFiles($this->files);
             $compressedFiles = [];
 
             foreach ($files as $file) {
@@ -1586,7 +1592,7 @@ class LCS_FileManager {
             return $compressedFiles;
         }
 
-        // Fallback to $file_path if no $file is provided
+        // Fallback to $file_path if no $files is provided
         if (!$this->file_path || !file_exists($this->file_path)) {
             throw new \Exception("No valid file path provided for compression.");
         }
@@ -1600,7 +1606,7 @@ class LCS_FileManager {
      *
      * @param string $filePath The path of the file to compress.
      * @return string The path of the compressed file.
-     * @throws Exception If compression fails or `$path` is invalid.
+     * @throws \Exception If compression fails or `$path` is invalid.
      */
     private function compressFile(string $filePath): string {
         // Validate the $path property for correctness
@@ -1654,7 +1660,7 @@ class LCS_FileManager {
      * Fetches the file metadata.
      *
      * @return array Metadata of the file.
-     * @throws Exception If the file path is invalid.
+     * @throws \Exception If the file path is invalid.
      */
     public function fetch() {
         if (!$this->file_path || !file_exists($this->file_path)) {
@@ -1676,7 +1682,7 @@ class LCS_FileManager {
      * without needing to create a new instance.
      */
     public function resetProperties() {
-        $this->file = null;
+        $this->files = null;
         $this->file_name = null;
         $this->file_path = null;
         $this->path = null;
@@ -1699,21 +1705,6 @@ class LCS_FileManager {
         while (ob_get_level()) {
             ob_end_clean();
         }
-    }
-
-    /**
-     * Destructor for LCS_FileManager class.
-     *
-     * This method is automatically called when the instance of the class is destroyed. It ensures that the PHP script
-     * reverts back to the original maximum execution time limit, which was temporarily changed in the constructor.
-     * 
-     * The destructor helps to clean up any modifications made during the class's lifecycle, restoring the environment
-     * to its previous state, specifically the execution time limit.
-     */
-    public function __destruct()
-    {
-        // Revert to the previous time limit
-        set_time_limit($this->previous_time_limit);
     }
 
     /**
@@ -1748,6 +1739,21 @@ class LCS_FileManager {
         $types = array_filter($types, static fn($v) => $v !== '');
 
         return array_values($types);
+    }
+
+    /**
+     * Destructor for LCS_FileManager class.
+     *
+     * This method is automatically called when the instance of the class is destroyed. It ensures that the PHP script
+     * reverts back to the original maximum execution time limit, which was temporarily changed in the constructor.
+     * 
+     * The destructor helps to clean up any modifications made during the class's lifecycle, restoring the environment
+     * to its previous state, specifically the execution time limit.
+     */
+    public function __destruct()
+    {
+        // Revert to the previous time limit
+        set_time_limit($this->previous_time_limit);
     }
 
 }
