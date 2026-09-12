@@ -1,0 +1,26 @@
+<?php
+// Allow all origin
+header("Access-Control-Allow-Origin: *");
+
+// Allow credentials (cookies, authorization headers, etc.) to be included in the request
+header("Access-Control-Allow-Credentials: true");
+
+// Allow specific headers
+header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
+
+// Allow specific methods
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+
+// Handle CORS preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+/*
+ * Include where you want the visitor to be redirected, e.g., to a checkpoint page
+ * where you can further validate the integrity of the request or perform additional
+ * checks before allowing access to the main content. This can help prevent
+ * unauthorized access and ensure that only legitimate requests are processed.
+ */
+require_once __DIR__ . '/../checkpoint.php';

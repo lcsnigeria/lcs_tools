@@ -793,7 +793,11 @@ class LCS_Requests
             );
         }
 
-        $pathSegments = explode('/', trim($uri, '/'));
+        $pathSegments = array_values(array_filter(explode('/', trim($uri, '/')), 'strlen'));
+
+        if (empty($pathSegments)) {
+            return false;
+        }
 
         if ($position === 'start') {
             $position = 0;

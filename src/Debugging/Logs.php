@@ -186,25 +186,37 @@ class Logs extends Exception
 
         /**
          * Strict patterns
+         *
+         * Handles both ISO timestamps and PHP-style timestamps with timezone info,
+         * plus numbered PHP error tags like [1], [2], and log type wrappers.
          */
-        $timestampPattern = '\[\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\]';
+        $timestampPattern = '\[(?:\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\s+[A-Za-z_\/-]+)?|\d{2}-[A-Za-z]{3}-\d{4}\s+\d{2}:\d{2}:\d{2}(?:\s+[A-Za-z_\/-]+)?)\]';
         $typePattern      = '\[[A-Z0-9_]+\]';
+        $numberTagPattern = '\[[0-9]+\]';
 
         /**
-         * 1) Repeatedly remove leading "[timestamp] [TYPE]" pairs
+         * 1) Repeatedly remove leading wrapper segments
+         *    Examples: [2026-01-24 16:08:25] [USER_CREATE_ERROR], [18-Aug-2026 12:58:49 Africa/Lagos], [1]
          */
-        $leadingPattern = '/^\s*' . $timestampPattern . '\s*' . $typePattern . '\s*/';
+        $leadingPatterns = [
+            '/^\s*' . $timestampPattern . '\s*(?:' . $typePattern . ')?\s*/',
+            '/^\s*' . $typePattern . '\s*/',
+            '/^\s*' . $numberTagPattern . '\s*/',
+        ];
 
-        while (preg_match($leadingPattern, $message)) {
-            $message = preg_replace($leadingPattern, '', $message, 1);
+        foreach ($leadingPatterns as $leadingPattern) {
+            while (preg_match($leadingPattern, $message)) {
+                $message = preg_replace($leadingPattern, '', $message, 1);
+            }
         }
 
         /**
-         * 2) Remove nested occurrences anywhere else in the string
-         *    (e.g. wrapped exception messages)
+         * 2) Remove nested / repeated wrappers anywhere else in the string
+         *    (e.g. wrapped exception messages or PHP numbered stack frames)
          */
-        $nestedPattern = '/' . $timestampPattern . '\s*' . $typePattern . '\s*/';
+        $nestedPattern = '/' . $timestampPattern . '\s*(?:' . $typePattern . '|' . $numberTagPattern . ')?\s*/';
         $message = preg_replace($nestedPattern, '', $message);
+        $message = preg_replace('/' . $numberTagPattern . '/', '', $message);
 
         /**
          * 3) Remove trailing file info (may appear multiple times)
@@ -212,12 +224,23 @@ class Logs extends Exception
         $message = preg_replace('/(?:\s*\|\s*File:\s*.+?)+$/', '', $message);
 
         /**
-         * 4) Final cleanup
+         * 4) Post-Final cleanup
          */
         $message = trim($message);
         $message = rtrim($message, " \t\n\r\0\x0B:");
 
-        return $message;
+        /**
+         * 5) Final cleanup
+         */
+        $messageData = explode('called in', $message, 2);
+        $message = rtrim($messageData[0] ?? 'Unknown error message', " \t\n\r\0\x0B,");
+        $finalMessage = preg_replace(
+            '~^(?:[A-Za-z_][A-Za-z0-9_]*[\\\\/])+[A-Za-z_][A-Za-z0-9_]*::{1,2}[A-Za-z_][A-Za-z0-9_]*\([^)]*\):\s*~',
+            '',
+            $message
+        );
+
+        return $finalMessage;
     }
 
     /**

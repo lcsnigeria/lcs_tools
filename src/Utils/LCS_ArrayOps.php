@@ -951,4 +951,60 @@ class LCS_ArrayOps
         return $shuffled;
     }
 
+    /**
+     * Explode a string into an array using a specified delimiter, with optional trimming of whitespace.
+     *
+     * This method splits the input string into parts based on the provided delimiter. 
+     * If `$trim` is true, it will also trim whitespace from each part and remove any empty strings.
+     *
+     * @param string $string The input string to be exploded.
+     * @param string $delimiter The delimiter to use for splitting the string.
+     * @param bool $trim Whether to trim whitespace from each part and remove empty strings. Defaults to true.
+     * @return array An array of non-empty, trimmed parts from the input string.
+     */
+    public static function explodeString(string $string, string $delimiter, bool $trim = true): array
+    {
+        $parts = explode($delimiter, $string);
+        if ($trim) {
+            $parts = array_map('trim', $parts);
+            $parts = array_values(array_filter($parts, static fn ($part) => $part !== '' && $part !== null));
+        }
+        return $parts;
+    }
+
+    /**
+     * Implode an array into a string with a specified delimiter, and optionally use a different delimiter for the last item.
+     *
+     * This method joins the elements of the input array into a single string, separated by the specified delimiter. 
+     * If `$lastDelimiter` is provided, it will be used to separate the last two items instead of the regular delimiter.
+     *
+     * @param array $array The input array to be imploded.
+     * @param string $delimiter The delimiter to use for joining the array elements. Defaults to ', '.
+     * @param string|false|null $lastDelimiter The delimiter to use before the last item. If null or false, the regular delimiter is used. Defaults to null.
+     * @return string A string representation of the array elements joined by the specified delimiters.
+     */
+    public static function implodeArray(array $array, string $delimiter = ', ', string|false|null $lastDelimiter = null): string
+    {
+        $count = count($array);
+        if ($count === 0) {
+            return '';
+        }
+        if ($count === 1) {
+            return (string)$array[0];
+        }
+        if ($count === 2) {
+            if (!empty($lastDelimiter)) {
+                return (string)$array[0] . $lastDelimiter . (string)$array[1];
+            }
+            return (string)$array[0] . $delimiter . (string)$array[1];
+        }
+
+        $allButLast = array_slice($array, 0, -1);
+        $last = (string)$array[$count - 1];
+        if (!empty($lastDelimiter)) {
+            return implode($delimiter, $allButLast) . $lastDelimiter . $last;
+        }
+        return implode($delimiter, $array);
+    }
+
 }

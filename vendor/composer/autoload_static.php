@@ -114,6 +114,9 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'M' =>
         array (
             'Minishlink\\WebPush\\' => 19,
+            'MaxMind\\WebService\\' => 19,
+            'MaxMind\\Exception\\' => 18,
+            'MaxMind\\Db\\' => 11,
             'Mailgun\\' => 8,
         ),
         'L' =>
@@ -140,6 +143,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'GuzzleHttp\\Promise\\' => 19,
             'GuzzleHttp\\' => 11,
             'GrahamCampbell\\ResultType\\' => 26,
+            'GeoIp2\\' => 7,
         ),
         'E' =>
         array (
@@ -156,6 +160,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         ),
         'C' =>
         array (
+            'Composer\\CaBundle\\' => 18,
             'Clue\\StreamFilter\\' => 18,
         ),
         'B' =>
@@ -353,6 +358,18 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/minishlink/web-push/src',
         ),
+        'MaxMind\\WebService\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/maxmind/web-service-common/src/WebService',
+        ),
+        'MaxMind\\Exception\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/maxmind/web-service-common/src/Exception',
+        ),
+        'MaxMind\\Db\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/maxmind-db/reader/src/MaxMind/Db',
+        ),
         'Mailgun\\' =>
         array (
             0 => __DIR__ . '/..' . '/mailgun/mailgun-php/src',
@@ -410,6 +427,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/graham-campbell/result-type/src',
         ),
+        'GeoIp2\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/geoip2/geoip2/src',
+        ),
         'Endroid\\QrCode\\' =>
         array (
             0 => __DIR__ . '/..' . '/endroid/qr-code/src',
@@ -437,6 +458,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'DASPRiD\\Enum\\' =>
         array (
             0 => __DIR__ . '/..' . '/dasprid/enum/src',
+        ),
+        'Composer\\CaBundle\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/composer/ca-bundle/src',
         ),
         'Clue\\StreamFilter\\' =>
         array (

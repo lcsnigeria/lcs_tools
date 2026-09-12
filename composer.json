@@ -26,7 +26,8 @@
         "spomky-labs/otphp": "^11.4",
         "chillerlan/php-qrcode": "^6.0",
         "yooper/php-text-analysis": "^1.9",
-        "edgaras/strsim": "^1.1"
+        "edgaras/strsim": "^1.1",
+        "geoip2/geoip2": "^3.4"
     },
     "config": {
         "allow-plugins": {

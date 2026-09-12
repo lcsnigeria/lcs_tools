@@ -338,46 +338,84 @@ final class LCS_Creds {
     }
 
     /**
-     * Verify a TOTP code.
+     * Verify a Time-based One-Time Password (TOTP) code.
      *
-     * @param string $issuer The application/service name.
-     * @param string $secret The user's TOTP secret.
-     * @param string $code   The TOTP code submitted by the user.
+     * Validates a user-submitted 6-digit TOTP code against the supplied
+     * Base32-encoded secret using OTPHP. A configurable leeway is allowed
+     * to accommodate minor differences between the user's device clock
+     * and the server clock.
      *
-     * @return bool True if valid, otherwise false.
+     * The leeway is specified in seconds, not TOTP periods. For example,
+     * a leeway of 10 allows approximately 10 seconds of clock drift.
+     *
+     * @param string $secret  The user's Base32-encoded TOTP secret.
+     * @param string $code    The 6-digit TOTP code submitted by the user.
+     * @param int    $leeway  Allowed clock drift in seconds. Defaults to 10.
+     *
+     * @return bool True if the TOTP code is valid, otherwise false.
+     *
+     * @throws \InvalidArgumentException If the secret, code, or leeway is invalid.
+     * @throws \RuntimeException If OTPHP fails while verifying the code.
      *
      * @example
      * $isValid = LCS_Creds::verifyTOTPCode(
-     *     'LCS',
      *     $secret,
-     *     $code
+     *     $_POST['totp_code']
      * );
+     *
+     * if ($isValid) {
+     *     echo 'TOTP verification successful.';
+     * }
      */
     public static function verifyTOTPCode(
-        string $issuer,
         string $secret,
-        string $code
-    ): bool
-    {
-        $totp = TOTP::create($secret);
+        string $code,
+        int $leeway = 10
+    ): bool {
+        if ($secret === '') {
+            throw new \InvalidArgumentException(
+                'TOTP secret is required.'
+            );
+        }
 
-        $totp->setIssuer($issuer);
+        if (!preg_match('/^\d{6}$/', $code)) {
+            throw new \InvalidArgumentException(
+                'TOTP code must be exactly 6 digits.'
+            );
+        }
 
-        /**
-         * Small clock drift tolerance.
-         *
-         * Accepts:
-         * - previous window
-         * - current window
-         * - next window
-         *
-         * Helps avoid false negatives
-         * from slight device/server time drift.
-         */
-        return $totp->verify(
-            $code,
-            null,
-            1
-        );
+        if ($leeway < 0) {
+            throw new \InvalidArgumentException(
+                'TOTP leeway cannot be negative.'
+            );
+        }
+
+        try {
+            /*
+            * Recreate the TOTP instance from the stored secret.
+            *
+            * createFromSecret() ensures that the same secret used during
+            * enrollment is used to calculate and verify the OTP.
+            */
+            $totp = TOTP::createFromSecret($secret);
+
+            /*
+            * Verify the submitted code.
+            *
+            * The third argument is the allowed clock drift in seconds.
+            * It is NOT the number of TOTP windows.
+            */
+            return $totp->verify(
+                $code,
+                null,
+                $leeway
+            );
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                'Failed to verify TOTP code: ' . $e->getMessage(),
+                0,
+                $e
+            );
+        }
     }
 }
