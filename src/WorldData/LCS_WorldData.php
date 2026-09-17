@@ -4,6 +4,7 @@ namespace LCSNG\Tools\WorldData;
 use LCSNG\Tools\WorldData\WDTraits\Countries;
 use LCSNG\Tools\WorldData\WDTraits\CallingCodes;
 use LCSNG\Tools\WorldData\WDTraits\Currencies;
+use LCSNG\Tools\WorldData\WDTraits\MaxMind;
 
 /*
  * Class LCS_WorldData
@@ -21,5 +22,5 @@ final class LCS_WorldData
     /*
      * Use traits to include methods for handling countries, calling codes, and currencies.
      */
-    use Countries, CallingCodes, Currencies;
+    use Countries, CallingCodes, Currencies, MaxMind;
 }

@@ -3,7 +3,7 @@
         'name' => 'lcsng/tools',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '1045583d2027506a54c7f5a606d70963740083e4',
+        'reference' => '322dd3e4ece89ff086a68bdbc0d1fb98c37a8490',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -157,7 +157,7 @@
         'lcsng/tools' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '1045583d2027506a54c7f5a606d70963740083e4',
+            'reference' => '322dd3e4ece89ff086a68bdbc0d1fb98c37a8490',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
