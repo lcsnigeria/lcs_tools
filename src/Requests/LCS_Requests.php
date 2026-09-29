@@ -68,15 +68,12 @@ class LCS_Requests
      * Unsets a request variable.
      *
      * @param string $key The request variable name.
-     * @throws \Exception If the variable is not set and error reporting is enabled.
      */
     public function unset_request_var(string $key)
     {
-        if (!isset($_REQUEST[$key])) {
-            $this->throw_error("Request variable '$key' is not set.");
-            return;
+        if (isset($_REQUEST[$key])) {
+            unset($_REQUEST[$key]);
         }
-        unset($_REQUEST[$key]);
     }
 
     /**
@@ -107,16 +104,13 @@ class LCS_Requests
      * Unsets a session variable.
      *
      * @param string $key The session variable name.
-     * @throws \Exception If the variable is not set and error reporting is enabled.
      */
     public function unset_session_var(string $key)
     {
         $this->start_session();
-        if (!isset($_SESSION[$key])) {
-            $this->throw_error("Session variable '$key' is not set.");
-            return;
+        if (isset($_SESSION[$key])) {
+            unset($_SESSION[$key]);
         }
-        unset($_SESSION[$key]);
     }
 
     /**
@@ -146,12 +140,54 @@ class LCS_Requests
 
     /**
      * Stops the session.
+     * 
+     * Use with caution: this will write session data and 
+     * close the session, preventing further writes.
      */
     public function stop_session()
     {
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
         }
+    }
+
+    /**
+     * Initializes the base user session structure.
+     *
+     * Ensures a session is active and that `$_SESSION['user']` contains the
+     * minimal identifying data (IP + User-Agent). This does not authenticate
+     * the user; it only ensures the session structure exists.
+     *
+     * Note: If the existing session data for the key 'user' is missing or not an
+     * array, it will be reset to an empty array.
+     *
+     * @return array The initialized session user array.
+     *
+     * @example
+     * ```php
+     * $sessionUser = $this->initializeUserSession();
+     * // Ensures $_SESSION['user'] has ip_address and user_agent.
+     * ```
+     */
+    public function initializeUserSession(): array
+    {
+        // ensure session started
+        $this->start_session();
+
+        // Create 'user' array if missing or invalid
+        if (empty($_SESSION['user']) || !is_array($_SESSION['user'])) {
+            $_SESSION['user'] = [];
+        }
+
+        $userAgentData = $this->get_user_agent() ?? [];
+        $userAgent = $userAgentData['user_agent'] ?? 'Unknown';
+
+        // Always refresh client tracking details
+        $_SESSION['user']['ip_address'] = $this->get_client_ip_address();
+        $_SESSION['user']['user_agent'] = $userAgent;
+
+        // Return session reference
+        return $_SESSION['user'];
     }
 
     /**

@@ -234,12 +234,16 @@ class LCS_RoutingController extends LCS_Requests
      * it renders the 404 error template if $render404onError is true, or
      * throws an error indicating that the template path is not defined.
      *
-     * @param string $path The path to check for a matching template property.
+     * @param string|null $path The path to check for a matching template property.
      * @param bool $render404onError Whether to render the 404 error template on error.
      * @throws \Exception If the template path is not defined and $render404onError is false.
      */
-    public function render_template_if_path_match_property(string $path, bool $render404onError = false)
+    public function render_template_by_path(?string $path = null, bool $render404onError = true)
     {
+        if ($path === null) {
+            $path = $this->get_uri_path_name(0, null, true);
+        }
+        
         $path = $path === '/' ? 'home' : $path;
         $path = preg_replace('/^\/|\/$/', '', $path);
         $template_path = $this->get_template_path($path);

@@ -18,9 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 /*
- * Include where you want the visitor to be redirected, e.g., to a checkpoint page
- * where you can further validate the integrity of the request or perform additional
- * checks before allowing access to the main content. This can help prevent
- * unauthorized access and ensure that only legitimate requests are processed.
- */
+* We suggest redirecting the visitor to a page where they can be further validated, such as a checkpoint page,
+* where you can validate the integrity of the request or perform additional
+* checks before allowing access to the main content. This can help prevent
+* unauthorized access and ensure that only legitimate requests are processed.
+*
+* The following line is an example of including a checkpoint file (located in your server root)
+* that can handle such validations.
+*/
 require_once __DIR__ . '/../checkpoint.php';
