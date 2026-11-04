@@ -244,7 +244,7 @@ class LCS_RoutingController extends LCS_Requests
             $path = $this->get_uri_path_name(0, null, true);
         }
         
-        $path = $path === '/' ? 'home' : $path;
+        $path = ($path === '/' || trim($path) === '') ? 'home' : $path;
         $path = preg_replace('/^\/|\/$/', '', $path);
         $template_path = $this->get_template_path($path);
         if (!$template_path) {

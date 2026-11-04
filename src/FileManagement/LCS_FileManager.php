@@ -6,46 +6,104 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
 /**
  * Class LCS_FileManager
  *
- * Provides tools for managing file operations, including uploading, copying, moving, deleting,
- * compressing, extracting, and reading files and archives. Supports formats such as ZIP, RAR, and TAR.GZ,
- * along with file metadata validation and management.
+ * Provides tools for managing file operations, including uploading, copying, moving, renaming,
+ * deleting, downloading, rendering, compressing, extracting, and reading files, directories and archives.
+ * Works with both filesystem paths and files uploaded from the client (`$_FILES`), for single or
+ * multiple files.
  *
- * @property array|null $files Stores uploaded file data from the $_FILES array.
- * @property string|null $file_path Direct path to the file on the system.
- * @property string|null $path Target directory path for file operations (e.g., upload, compression).
- * @property int $previous_time_limit Stores the previous PHP script execution time limit, allowing restoration upon class destruction.
+ * Archive support:
+ * - Create: ZIP (`zipData()`), GZIP (`compress()`)
+ * - Extract: ZIP, TAR.GZ (`unzipData()`)
+ * - Read/inspect: ZIP, TAR, TAR.GZ (`readArchive()`)
  *
- * @method array upload()
- *         Uploads multiple files to the specified directory based on their purpose.
- * @method array copy()
- *         Copies multiple files to a new directory.
- * @method array move()
- *         Moves multiple files to a new directory.
- * @method array delete()
- *         Deletes multiple files.
- * @method string rename(string $new_name)
- *         Renames the file.
- * @method bool download()
- *         Downloads multiple files as a ZIP archive or a single file directly.
- * @method void render()
- *         Renders a file to the browser by setting appropriate headers and streaming the file content.
- * @method string|false zipData(string|array $data, string|null $zipFileName = null, bool $returnData = false)
- *         Creates a ZIP archive from files or directories.
- * @method bool unzipData()
- *         Extracts an archive (ZIP, RAR, TAR.GZ) to the specified directory.
+ * Typical usage:
+ * ```php
+ * $fm = new LCS_FileManager();
+ * $fm->files = $_FILES['docs'];
+ * $fm->path  = '/var/www/uploads/docs';
+ * $fm->file_types = ['application/pdf'];
+ * $names = $fm->upload(true);
+ * ```
+ *
+ * Configuration properties
+ * @property array|null        $files             Uploaded file data from `$_FILES` (single or multiple).
+ * @property string|array|null $file_path         Path(s) of existing file(s) for copy, move, delete, download, render, rename, fetch, compress and unzip.
+ * @property string|null       $path              Target directory for upload, copy, move, download-to-path, compress, zipData and unzipData.
+ * @property string|null       $file_name         Custom base name applied to uploads when `$rename` is true (e.g. `cat` => `cat.jpg`, `cat___2.jpg`).
+ * @property array|string      $file_types        Custom allowed MIME types for uploads/rendering. Empty = use the built-in whitelist.
+ * @property int               $file_limit        Max number of files per upload/copy/move/delete/download operation (default 10).
+ * @property int               $max_file_size     Max allowed upload size in bytes (default 100 MB).
+ * @property int               $min_file_size     Min allowed upload size in bytes (default 0).
+ * @property int               $time_limit        Max execution time in seconds for file operations (default 0 = no limit).
+ * @property bool              $rename            Whether uploads are renamed (default true). When false, the original name is kept.
+ * @property bool              $overwrite         Whether an existing file with the same name is replaced on upload (default false).
+ * @property bool              $mark_valid        When true, skips MIME type and size validation on upload (default false).
+ * @property array             $uploadedFileNames Names of files saved by the last `upload()` call.
+ *
+ * Upload & file operations
+ * @method array        upload(bool $forceConfigs = false)
+ *         Uploads one or more files to `$path`, validating MIME type and size. Optionally creates `$path`. Returns the saved file names.
+ * @method array        copy()
+ *         Copies the file(s) in `$file_path` into `$path`. Returns the new paths.
+ * @method array        move()
+ *         Moves the file(s) in `$file_path` into `$path`. Returns the new paths.
+ * @method array        delete()
+ *         Deletes the file(s) or directory(ies) in `$file_path` (directories recursively). Returns the deleted paths.
+ * @method string       rename(string $new_name)
+ *         Renames the file in `$file_path` within its current directory. Returns the new path.
+ * @method bool         isFileExist(string $fileName, string $fileDir)
+ *         Checks whether a file exists in the given directory.
+ * @method bool         download()
+ *         Copies file(s) to `$path` when set (returns true). Otherwise streams a single file, or a ZIP bundle for multiple files, to the browser and exits.
+ * @method void         render()
+ *         Streams a file inline to the browser with MIME type and caching headers (ETag, Last-Modified, 1-year cache) and exits.
+ *
+ * Info & inspection
+ * @method string|array getFileName(string|array|null $files = null, bool $withExtension = false)
+ *         Gets the name(s) of a file path or uploaded file(s), with or without extension.
+ * @method int|string|array getFileSize(string|array|null $file = null, bool $recursive = true, array $exclude = [], bool $humanReadable = false)
+ *         Gets the size of a file, a directory (total), uploaded file(s), or a list of paths. Returns bytes, or a formatted string when `$humanReadable` is true.
+ * @method static string formatBytes(int $bytes, int $precision = 2)
+ *         Formats a byte count into a human-readable string (B, KB, MB, GB, TB, PB).
+ * @method void         validateFileSize(string|array|null $files = null, ?int $min_file_size = null, ?int $max_file_size = null)
+ *         Validates file size against the min/max limits. Throws if out of bounds.
+ * @method string|array getFileContents(string|array|null $files = null, bool $stream = false, bool $asBase64 = false, array $replacements = [])
+ *         Reads file content(s), optionally streamed in chunks, Base64-encoded, or with `['search' => 'replace']` text substitutions.
+ * @method array        fetch()
+ *         Retrieves metadata (name, size, type, path) of the file in `$file_path`.
+ * @method array        getUploadedFileNames()
+ *         Returns the names of files saved by the last `upload()` call.
+ *
+ * Directory tools
+ * @method array        readDir(string $path, array $exclude = [], bool $returnFullPath = false)
+ *         Scans a directory and returns first file/dir, top-level files, and all nested files and directories.
+ * @method array        getDirs(string $dir, array $exclude = [], bool $returnFullPath = false)
+ *         Recursively lists all sub-directories, skipping excluded directory names.
+ * @method array        getFiles(string $dir, array $exclude = [], bool $returnFullPath = false)
+ *         Recursively lists all files, skipping excluded directory names.
+ *
+ * Archives & compression
+ * @method string|false zipData(string|array $data, ?string $zipFileName = null, bool $returnData = false)
+ *         Creates a ZIP from files and/or directories. Returns the ZIP path, or raw ZIP data when `$returnData` is true.
+ * @method bool         unzipData(bool $createPath = false)
+ *         Extracts a single ZIP or TAR.GZ archive (from `$files` or `$file_path`) into `$path`.
+ * @method array        readArchive(string|array|null $fileNames = null)
+ *         Lists the contents of a ZIP, TAR or TAR.GZ archive and optionally returns the contents of specified entries.
  * @method array|string compress()
- *         Compresses a file or multiple files using gzip.
- * @method array fetch()
- *         Retrieves metadata of a specified file.
- * @method array readArchive(string|array|null $fileNames = null)
- *         Reads the contents of an archive and retrieves contents of specified files.
- * @method string compressFile(string $filePath)
- *         Compresses a single file using gzip.
- * @method void __destruct()
- *         Resets the PHP script execution time limit to its original value.
+ *         Compresses uploaded file(s) or `$file_path` with gzip into `$path`. Returns the `.gz` path(s).
+ *
+ * Lifecycle & utilities
+ * @method void         __construct(?int $time_limit = null, ?bool $clear_output_buffer = true)
+ *         Sets the execution time limit and optionally clears all active output buffers.
+ * @method void         resetProperties()
+ *         Resets `$files`, `$file_name`, `$file_path`, `$path`, `$file_limit`, `$time_limit` and `$rename` to their defaults.
+ * @method void         clearOutputBuffers()
+ *         Clears all active output buffers to prevent corrupting downloads and streams.
+ * @method void         __destruct()
+ *         Restores the original PHP script execution time limit.
  *
  * @package File Management
- * @dependencies ZipArchive, RarArchive (optional), PharData
+ * @dependencies ZipArchive (ZIP), PharData (TAR / TAR.GZ), Fileinfo, Zlib (gzip), LCS_FileComponents
  */
 class LCS_FileManager {
 
@@ -446,6 +504,171 @@ class LCS_FileManager {
         }
 
         return $fileNames;
+    }
+
+    /**
+     * Gets the size (in bytes) of a file, a directory, an uploaded file, or a list of them.
+     *
+     * Supported inputs for `$file`:
+     * - string path to a file             => int (size of that file)
+     * - string path to a directory        => int (total size of all files inside it)
+     * - a `$_FILES` entry (single upload) => int
+     * - a `$_FILES` entry (multi upload)  => array of `[name => size]`
+     * - an array of string paths          => array of `[path => size]` (each path may be a file or a directory)
+     * - null                              => falls back to `$this->files`, then `$this->file_path`
+     *
+     * @param string|array|null $file          File/dir path, uploaded file array, or a list of paths.
+     * @param bool              $recursive     For directories: include sub-directories (default true).
+     * @param array             $exclude       For directories: sub-directory names to skip.
+     * @param bool              $humanReadable Return a formatted string (e.g. "1.25 MB") instead of bytes.
+     *
+     * @return int|string|array Size in bytes (or formatted string); an array when multiple files are given.
+     * @throws \Exception If no file is provided, the path doesn't exist, or an upload is invalid.
+     *
+     * @example
+     * ```php
+     * $fm = new LCS_FileManager();
+     *
+     * $fm->getFileSize('/var/www/uploads/a.pdf');                  // 48213
+     * $fm->getFileSize('/var/www/uploads');                        // 9482211 (whole dir, recursive)
+     * $fm->getFileSize('/var/www/uploads', false);                 // top-level files only
+     * $fm->getFileSize('/var/www/uploads', true, ['cache'], true); // "9.04 MB", skipping any "cache" dir
+     *
+     * $fm->getFileSize($_FILES['avatar']);                         // single upload => int
+     * $fm->getFileSize($_FILES['docs']);                           // multi upload  => ['a.pdf' => 123, 'b.zip' => 456]
+     * ```
+     */
+    public function getFileSize($file = null, bool $recursive = true, array $exclude = [], bool $humanReadable = false)
+    {
+        // Fallback to class properties (same pattern as getFileName / validateFileSize)
+        if (is_null($file) || empty($file)) {
+            if (!empty($this->files)) {
+                $file = $this->files;
+            } elseif (!empty($this->file_path)) {
+                $file = $this->file_path;
+            } else {
+                throw new \Exception("No file parameter provided and no default file available.");
+            }
+        }
+
+        $format = fn(int $bytes) => $humanReadable ? self::formatBytes($bytes) : $bytes;
+
+        // Single path (file or directory)
+        if (is_string($file)) {
+            return $format($this->getPathSize($file, $recursive, $exclude));
+        }
+
+        if (!is_array($file)) {
+            throw new \Exception("Invalid file parameter provided.");
+        }
+
+        // List of string paths (files and/or directories)
+        $isPathList = !isset($file['name']) && count($file) === count(array_filter($file, 'is_string'));
+        if ($isPathList) {
+            $sizes = [];
+            foreach ($file as $path) {
+                $sizes[$path] = $format($this->getPathSize($path, $recursive, $exclude));
+            }
+            return $sizes;
+        }
+
+        // Uploaded file(s) from $_FILES
+        $files = $this->normalizeFiles($file);
+
+        if (count($files) === 1) {
+            return $format($this->getUploadedFileSize($files[0]));
+        }
+
+        $sizes = [];
+        foreach ($files as $f) {
+            $sizes[$f['name']] = $format($this->getUploadedFileSize($f));
+        }
+        return $sizes;
+    }
+
+    /**
+     * Resolves the size of a file or directory path.
+     *
+     * @throws \Exception If the path does not exist.
+     */
+    private function getPathSize(string $path, bool $recursive = true, array $exclude = []): int
+    {
+        if (is_file($path)) {
+            $size = filesize($path);
+            if ($size === false) {
+                throw new \Exception("Unable to read file size: " . $path);
+            }
+            return $size;
+        }
+
+        if (is_dir($path)) {
+            $total = 0;
+
+            if (!$recursive) {
+                foreach (scandir($path) as $entry) {
+                    $full = $path . DIRECTORY_SEPARATOR . $entry;
+                    if ($entry !== '.' && $entry !== '..' && is_file($full) && !is_link($full)) {
+                        $total += (int) filesize($full);
+                    }
+                }
+                return $total;
+            }
+
+            $directoryIterator = new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS);
+            $filter = new \RecursiveCallbackFilterIterator(
+                $directoryIterator,
+                function ($current) use ($exclude) {
+                    return !($current->isDir() && in_array($current->getFilename(), $exclude, true));
+                }
+            );
+
+            foreach (new \RecursiveIteratorIterator($filter) as $item) {
+                if ($item->isFile() && !$item->isLink()) {
+                    $total += (int) $item->getSize();
+                }
+            }
+            return $total;
+        }
+
+        throw new \Exception("File or directory does not exist: " . $path);
+    }
+
+    /**
+     * Resolves the size of a single normalized uploaded file array.
+     * Prefers the real size of the temp file on disk, falls back to the reported `size`.
+     *
+     * @throws \Exception If the upload is invalid or has an upload error.
+     */
+    private function getUploadedFileSize(array $f): int
+    {
+        if (isset($f['error']) && $f['error'] !== UPLOAD_ERR_OK) {
+            throw new \Exception("Invalid file provided: " . ($f['name'] ?? 'unknown'));
+        }
+
+        if (!empty($f['tmp_name']) && file_exists($f['tmp_name'])) {
+            $size = filesize($f['tmp_name']);
+            if ($size !== false) {
+                return $size;
+            }
+        }
+
+        if (isset($f['size'])) {
+            return (int) $f['size'];
+        }
+
+        throw new \Exception("Invalid file array provided.");
+    }
+
+    /**
+     * Formats a byte count into a human-readable string.
+     *
+     * @example LCS_FileManager::formatBytes(1310720); // "1.25 MB"
+     */
+    public static function formatBytes(int $bytes, int $precision = 2): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+        $i = $bytes > 0 ? min((int) floor(log($bytes, 1024)), count($units) - 1) : 0;
+        return round($bytes / (1024 ** $i), $precision) . ' ' . $units[$i];
     }
 
     /**
