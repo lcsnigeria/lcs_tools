@@ -936,11 +936,11 @@ class LCS_FileManager {
 
         $iterator = new \RecursiveIteratorIterator($filter);
 
-        foreach ($iterator as $files) {
-            if ($files->isFile()) {
+        foreach ($iterator as $item) {
+            if ($item->isFile()) {
                 $files[] = $returnFullPath
-                    ? $files->getPathname()   // Full path
-                    : $files->getFilename(); // Only filename
+                    ? $item->getPathname()
+                    : $item->getFilename();
             }
         }
 
