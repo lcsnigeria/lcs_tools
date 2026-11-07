@@ -29,6 +29,7 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
  * @property array|null        $files             Uploaded file data from `$_FILES` (single or multiple).
  * @property string|array|null $file_path         Path(s) of existing file(s) for copy, move, delete, download, render, rename, fetch, compress and unzip.
  * @property string|null       $path              Target directory for upload, copy, move, download-to-path, compress, zipData and unzipData.
+ * @property bool              $create_path       Whether the destination directory (`$path`) is created when it doesn't exist (default false).
  * @property string|null       $file_name         Custom base name applied to uploads when `$rename` is true (e.g. `cat` => `cat.jpg`, `cat___2.jpg`).
  * @property array|string      $file_types        Custom allowed MIME types for uploads/rendering. Empty = use the built-in whitelist.
  * @property int               $file_limit        Max number of files per upload/copy/move/delete/download operation (default 10).
@@ -36,21 +37,24 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
  * @property int               $min_file_size     Min allowed upload size in bytes (default 0).
  * @property int               $time_limit        Max execution time in seconds for file operations (default 0 = no limit).
  * @property bool              $rename            Whether uploads are renamed (default true). When false, the original name is kept.
- * @property bool              $overwrite         Whether an existing file with the same name is replaced on upload (default false).
+ * @property string            $duplicate_resolution What copy(), move(), upload() and rename() do when a name already exists: 'reject' (default), 'overwrite' (files only) or 'duplicate' ("name-N").
+ * @property bool              $overwrite         @deprecated Alias for `$duplicate_resolution`: true = 'overwrite', false = 'reject'. Use `$duplicate_resolution`.
  * @property bool              $mark_valid        When true, skips MIME type and size validation on upload (default false).
  * @property array             $uploadedFileNames Names of files saved by the last `upload()` call.
  *
  * Upload & file operations
- * @method array        upload(bool $forceConfigs = false)
- *         Uploads one or more files to `$path`, validating MIME type and size. Optionally creates `$path`. Returns the saved file names.
- * @method array        copy()
- *         Copies the file(s) in `$file_path` into `$path`. Returns the new paths.
- * @method array        move()
- *         Moves the file(s) in `$file_path` into `$path`. Returns the new paths.
+ * @method array        upload(?string $duplicateResolution = null)
+ *         Uploads one or more files to `$path` (created when `$create_path` is true), validating MIME type and size. Name conflicts follow `$duplicateResolution` (else `$duplicate_resolution`). Returns the saved file names.
+ * @method array        move(string|array|null $files = null, ?string $destination = null, ?string $duplicateResolution = null)
+ *         Moves file(s) or directories into `$destination` (else `$path`), with the same conflict handling as copy(). Returns the new paths.
+ * @method array        copy(string|array|null $files = null, ?string $destination = null, ?string $duplicateResolution = null)
+ *         Copies file(s) or directories (`$files`, else `$file_path`) into `$destination` (else `$path`). Name conflicts follow `$duplicateResolution` (else `$duplicate_resolution`): reject, overwrite (files only) or duplicate ("name-N"). Directories are never overwritten. Returns the new paths.
+ * @method string       duplicate(?string $file = null)
+ *         Duplicates a single file (`$file`, else `$file_path`) into `$path` (or its own directory) as "name-N.ext", using the first free number. Never replaces an existing file. Returns the new path.
  * @method array        delete()
  *         Deletes the file(s) or directory(ies) in `$file_path` (directories recursively). Returns the deleted paths.
- * @method string       rename(string $new_name)
- *         Renames the file in `$file_path` within its current directory. Returns the new path.
+ * @method string       rename(string $new_name, string|bool|null $duplicateResolution = null)
+ *         Renames a file or directory in `$file_path` within its current parent directory. Rejects paths in the name. Name conflicts follow `$duplicateResolution` (else `$duplicate_resolution`); directories are never overwritten. Returns the new path.
  * @method bool         isFileExist(string $fileName, string $fileDir)
  *         Checks whether a file exists in the given directory.
  * @method bool         download()
@@ -167,6 +171,14 @@ class LCS_FileManager {
     public $path;
 
     /**
+     * @var bool $create_path
+     * Whether the destination directory (`$path`) is created when it doesn't exist.
+     * - `false` : throw an exception if the destination is not an existing directory (default).
+     * - `true`  : create it, including any missing parent directories.
+     */
+    public $create_path = false;
+
+    /**
      * @var string|array $file_path
      * The path of a specific file for operations such as download, delete, move, or copy.
      * This property is useful for direct file manipulations outside of the upload process.
@@ -259,11 +271,15 @@ class LCS_FileManager {
     public $rename = true;
 
     /**
-     * Indicates whether existing files should be overwritten.
-     *
-     * @var bool $overwrite If true, existing files will be overwritten. If false, existing files will be preserved.
+     * @var string $duplicate_resolution
+     * What copy(), move(), upload() and rename() do when an item's name already exists in the destination:
+     * - `reject`    : throw an exception and touch nothing (default).
+     * - `overwrite` : replace an existing FILE. Directories are never overwritten or merged: a directory clash throws.
+     * - `duplicate` : keep both, naming the incoming item "name-1", "name-2", ... (before the extension for files).
+     * Can be overridden per call through the `$duplicateResolution` argument of those methods.
+     * Replaces the deprecated `$overwrite` property.
      */
-    public $overwrite = false;
+    public $duplicate_resolution = 'reject';
 
     /**
      * @var bool $mark_valid
@@ -328,12 +344,64 @@ class LCS_FileManager {
     }
 
     /**
+     * Backward compatibility: maps the deprecated `$overwrite` property onto `$duplicate_resolution`.
+     * Setting `$overwrite = true` selects 'overwrite'; setting it to false selects 'reject'.
+     * Any other undefined property behaves as before (a dynamic property is created).
+     *
+     * @param string $name  Property name.
+     * @param mixed  $value Value being assigned.
+     */
+    public function __set($name, $value)
+    {
+        if ($name === 'overwrite') {
+            trigger_error('LCS_FileManager::$overwrite is deprecated. Use $duplicate_resolution instead.', E_USER_DEPRECATED);
+            $this->duplicate_resolution = $value ? 'overwrite' : 'reject';
+            return;
+        }
+        // __set() also fires for private properties; keep them private
+        if (property_exists($this, $name)) {
+            throw new \Error('Cannot access private property ' . static::class . '::$' . $name);
+        }
+        $this->$name = $value;
+    }
+
+    /**
+     * Backward compatibility: reads the deprecated `$overwrite` property (true when `$duplicate_resolution` is 'overwrite').
+     *
+     * @param string $name Property name.
+     * @return mixed
+     */
+    public function __get($name)
+    {
+        if ($name === 'overwrite') {
+            trigger_error('LCS_FileManager::$overwrite is deprecated. Use $duplicate_resolution instead.', E_USER_DEPRECATED);
+            return $this->duplicate_resolution === 'overwrite';
+        }
+        if (property_exists($this, $name)) {
+            throw new \Error('Cannot access private property ' . static::class . '::$' . $name);
+        }
+        trigger_error('Undefined property: ' . static::class . '::$' . $name, E_USER_NOTICE);
+        return null;
+    }
+
+    /**
+     * Backward compatibility: lets isset() work on the deprecated `$overwrite` property.
+     *
+     * @param string $name Property name.
+     * @return bool
+     */
+    public function __isset($name)
+    {
+        return $name === 'overwrite';
+    }
+
+    /**
      * List of valid MIME types for file operations.
      * 
      * This array defines the allowed MIME types for uploaded or rendered files,
      * ensuring only supported file types are processed.
      */
-    private static $validMimeTypes = [
+    private static array $validMimeTypes = [
         // Images
         "image/jpeg", "image/png", "image/gif", "image/svg+xml", "image/webp",
 
@@ -957,35 +1025,61 @@ class LCS_FileManager {
     }
 
     /**
-     * Uploads multiple files to the specified directory based on their purpose.
+     * Uploads one or more files to the specified directory.
      *
-     * @param bool $forceConfigs Whether to force creation of the target directory if it doesn't exist.
-     * @return array The names of the uploaded files.
-     * @throws \Exception If any file is invalid or an upload fails.
+     * The target directory is `$path`. If it doesn't exist, it is created when `$create_path` is true,
+     * otherwise an exception is thrown.
+     *
+     * Name conflicts in `$path` follow `$duplicateResolution` (else `$duplicate_resolution`):
+     * - reject    : throw if a file with the final name already exists.
+     * - overwrite : replace the existing file. A directory with that name is never replaced: it throws.
+     * - duplicate : keep both. The upload is saved as "name-1.ext", "name-2.ext", ... using the first free number.
+     *
+     * @param string|null $duplicateResolution 'overwrite' | 'duplicate' | 'reject'. Null = use `$this->duplicate_resolution`.
+     * @return array The names of the uploaded files (after any "duplicate" renumbering).
+     * @throws \Exception If a boolean is passed, `$path` is missing/unusable, any file is invalid,
+     *                    a name conflict can't be resolved, or an upload fails.
+     *
+     * @example
+     * ```php
+     * $fm->files       = $_FILES['docs'];
+     * $fm->path        = '/var/www/uploads/docs';
+     * $fm->create_path = true;               // create the folder if it's missing
+     * $names = $fm->upload();                // conflicts follow $fm->duplicate_resolution
+     * $names = $fm->upload('duplicate');     // keep both on a name clash, this call only
+     * ```
      */
-    public function upload($forceConfigs = false) :array {
+    public function upload($duplicateResolution = null) :array {
+        // Guard against the old signature upload($forceConfigs): a bare true would otherwise mean "overwrite"
+        if (is_bool($duplicateResolution)) {
+            throw new \Exception("upload() no longer takes a boolean. Set \$create_path = true to create the directory, and pass 'overwrite', 'duplicate' or 'reject' as the argument.");
+        }
+
         // Check if path is provided and valid
         if (empty($this->path)) {
             throw new \Exception("No path provided.");
         }
         if (!is_dir($this->path)) {
-            if (!$forceConfigs) {
-                throw new \Exception("Path is not a directory: {$this->path}");
+            if (!$this->create_path) {
+                throw new \Exception("Path is not a directory: {$this->path}. Create it first or set \$create_path = true.");
             }
-            if (!mkdir($this->path, 0775, true)) {
+            if (!mkdir($this->path, 0775, true) && !is_dir($this->path)) {
                 throw new \Exception("Failed to create directory: {$this->path}");
             }
         }
         if (!is_writable($this->path)) {
             throw new \Exception("Path is not writable: {$this->path}");
         }
-    
+
         // Update time limit for this upload process
         set_time_limit($this->time_limit);
-        
+
         if (!$this->files) {
             throw new \Exception("No files provided.");
         }
+
+        // Argument wins; otherwise fall back to the class property
+        $resolution = $this->resolveDuplicateResolution($duplicateResolution);
 
         // Normalize $this->files to an array of files
         $files = $this->normalizeFiles($this->files);
@@ -1026,40 +1120,34 @@ class LCS_FileManager {
             // Determine the target directory
             $targetDirectory = rtrim($this->path, '/') . '/';
 
-            // Create target directory if it doesn't exist
-            if (!file_exists($targetDirectory)) {
-                if (!mkdir($targetDirectory, 0777, true)) {
-                    throw new \Exception("Failed to create target directory: " . $targetDirectory);
-                }
-            }
-
             // If $file_name not set; Generate a unique filename to avoid overwriting
-            $fileName = pathinfo($file['name'], PATHINFO_FILENAME);
+            $fileName      = pathinfo($file['name'], PATHINFO_FILENAME);
             $fileExtension = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $newfileName = "{$fileName}.{$fileExtension}";
+            $suffix        = $fileExtension !== '' ? '.' . $fileExtension : '';
+            $newfileName   = $fileName . $suffix;
             if ($this->rename) {
                 if (!empty($this->file_name)) {
-                    $newfileName = $this->file_name . '___' . "{$interationCounter}.{$fileExtension}";
+                    $newfileName = $this->file_name . '___' . $interationCounter . $suffix;
                 } else {
-                    $newfileName = 'lcs_file_' . time() . '_' . uniqid() . '.' . $fileExtension;
+                    $newfileName = 'lcs_file_' . time() . '_' . uniqid() . $suffix;
                 }
             }
             // For a custom name, reset the first file name to normal; e.g. cat___1.jpeg to cat.jpeg
-            $newfileName = preg_replace('/___1\.' . preg_quote($fileExtension, '/') . '$/', '.' . $fileExtension, $newfileName);
+            $newfileName = preg_replace('/___1' . preg_quote($suffix, '/') . '$/', $suffix, $newfileName);
 
-            // Check if the file already exists in the target directory
-            // Then check if overwrite is enabled, set the file path and delete the existing file before proceeding
-            // Else, throw an exception if overwrite is disabled and the file exists
-            if ($this->isFileExist($newfileName, $targetDirectory)) {
-                if ($this->overwrite) {
-                    $this->file_path = $targetDirectory . $newfileName;
-                    $this->delete();
-                } else {
-                    throw new \Exception("File '{$newfileName}' already exists in '{$targetDirectory}'. Either delete it manually or enable overwriting.");
+            // Resolve a name conflict according to the duplicate resolution
+            $targetFile = $targetDirectory . $newfileName;
+
+            if (file_exists($targetFile)) {
+                if ($resolution === 'duplicate') {
+                    $targetFile  = $this->uniqueTarget(rtrim($targetDirectory, '/\\'), $newfileName, false, []);
+                    $newfileName = basename($targetFile);
+                } elseif (is_dir($targetFile)) {
+                    throw new \Exception("A directory named '{$newfileName}' already exists in '{$targetDirectory}'. Directories are never overwritten.");
+                } elseif ($resolution !== 'overwrite') {
+                    throw new \Exception("File '{$newfileName}' already exists in '{$targetDirectory}'. Use the 'overwrite' or 'duplicate' resolution, or delete it manually.");
                 }
             }
-
-            $targetFile = $targetDirectory . $newfileName;
 
             // Move the file to the target directory
             if (!move_uploaded_file($file['tmp_name'], $targetFile)) {
@@ -1074,89 +1162,212 @@ class LCS_FileManager {
     }
 
     /**
-     * Copies multiple files to a new directory.
+     * Moves one or more files or directories into a destination directory.
      *
-     * @return array The paths of the copied files.
-     * @throws \Exception If any file path or target directory is invalid, or a copy operation fails.
+     * Takes the same arguments and conflict handling as copy(). If a plain rename fails (for example
+     * across drives), the item is copied and the original is removed only after the copy succeeded.
+     * Moving an item to the place it already is throws, in every mode.
+     *
+     * @param string|array|null $files               Path(s) to move. Null = use `$this->file_path`.
+     * @param string|null       $destination         Directory to move into. Null = use `$this->path`.
+     * @param string|null       $duplicateResolution 'overwrite' | 'duplicate' | 'reject'. Null = use `$this->duplicate_resolution`.
+     * @return array The new paths of the moved items.
+     * @throws \Exception On the same conditions as copy(), or if an item is already in the destination.
+     *
+     * @example
+     * ```php
+     * $fm->move('/var/www/uploads/a.pdf', '/var/www/archive');
+     * $fm->move('/var/www/uploads/old_site', '/var/www/archive', 'duplicate');
+     * ```
      */
-    public function copy() {
-        if (!$this->file_path || !$this->path) {
-            throw new \Exception("File path or target directory not provided.");
-        }
+    public function move($files = null, ?string $destination = null, ?string $duplicateResolution = null) {
+        $jobs  = $this->planTransfer($files, $destination, $duplicateResolution, 'move');
+        $moved = [];
 
-        // Normalize $this->file_path into an array
-        $filePaths = !is_array($this->file_path) ? [$this->file_path] : $this->file_path;
+        foreach ($jobs as $job) {
+            $source = $job['source'];
+            $target = $job['target'];
 
-        // Limit the number of files
-        if (count($filePaths) > $this->file_limit) {
-            throw new \Exception("Exceeded file copy limit of {$this->file_limit}.");
-        }
-
-        // Create the target directory if it doesn't exist
-        if (!file_exists($this->path)) {
-            mkdir($this->path, 0777, true);
-        }
-
-        $copiedFiles = [];
-        foreach ($filePaths as $filePath) {
-            if (!file_exists($filePath)) {
-                throw new \Exception("File not found: " . $filePath);
+            if (!@rename($source, $target)) {
+                // Fallback (e.g. across drives): copy, then remove the original only after the copy succeeded
+                if ($job['isDir']) {
+                    $this->copyDirectory($source, $target);
+                    $this->removeDirectory($source);
+                } else {
+                    if (!copy($source, $target)) {
+                        throw new \Exception("Error moving file: " . $source);
+                    }
+                    if (!unlink($source)) {
+                        throw new \Exception("File was copied to '{$target}' but the original could not be removed: " . $source);
+                    }
+                }
             }
 
-            $filename = basename($filePath);
-            $targetFile = rtrim($this->path, '/') . '/' . $filename;
-
-            if (!copy($filePath, $targetFile)) {
-                throw new \Exception("Error copying file: " . $filePath);
-            }
-
-            $copiedFiles[] = $targetFile;
+            $moved[] = $target;
         }
 
-        return $copiedFiles;
+        return $moved;
     }
 
     /**
-     * Moves multiple files to a new directory.
+     * Copies one or more files or directories into a destination directory.
      *
-     * @return array The paths of the moved files.
-     * @throws \Exception If any file path or target directory is invalid, or a move operation fails.
+     * Items are `$files` when given (a path or an array of paths), otherwise `$file_path`. The destination is
+     * `$destination` when given, otherwise `$path`, and it is created if missing. Items keep their names
+     * unless a conflict is resolved with "duplicate". Directories are copied recursively.
+     *
+     * Conflict handling (`$duplicateResolution`, else `$duplicate_resolution`):
+     * - reject    : throw if any name already exists (nothing is copied).
+     * - overwrite : replace existing files. Directories are never overwritten or merged: a directory
+     *               clash throws, like reject.
+     * - duplicate : keep both. The incoming item is named "name-1", "name-2", ... using the first free number.
+     *
+     * Everything is validated and every name is resolved before the first copy starts. Neither `$file_path`
+     * nor `$path` is changed by passing arguments.
+     *
+     * @param string|array|null $files               Path(s) to copy. Null = use `$this->file_path`.
+     * @param string|null       $destination         Directory to copy into. Null = use `$this->path`.
+     * @param string|null       $duplicateResolution 'overwrite' | 'duplicate' | 'reject'. Null = use `$this->duplicate_resolution`.
+     * @return array The paths of the new items.
+     * @throws \Exception On missing input, an invalid resolution, a missing source, the file limit, an
+     *                    unresolved conflict, a directory copied into itself, a symbolic link inside a
+     *                    copied directory, or a failed copy.
+     *
+     * @example
+     * ```php
+     * $fm->copy('/var/www/uploads/a.pdf', '/var/www/backups');
+     * $fm->copy('/var/www/uploads/images', '/var/www/backups');                     // whole folder
+     * $fm->copy(['/x/a.pdf', '/x/docs'], '/var/www/backups', 'duplicate');          // keep both on conflict
+     * $fm->copy('/x/a.pdf', '/var/www/backups', 'overwrite');                       // replaces a file only
+     *
+     * $fm->path = '/var/www/backups';
+     * $fm->duplicate_resolution = 'duplicate';
+     * $fm->copy('/x/a.pdf');                                                        // uses both properties
+     * ```
      */
-    public function move() {
-        if (!$this->file_path || !$this->path) {
-            throw new \Exception("File path or target directory not provided.");
-        }
+    public function copy($files = null, ?string $destination = null, ?string $duplicateResolution = null) {
+        $jobs   = $this->planTransfer($files, $destination, $duplicateResolution, 'copy');
+        $copied = [];
 
-        // Normalize $this->file_path into an array
-        $filePaths = !is_array($this->file_path) ? [$this->file_path] : $this->file_path;
-
-        // Limit the number of files
-        if (count($filePaths) > $this->file_limit) {
-            throw new \Exception("Exceeded file move limit of {$this->file_limit}.");
-        }
-
-        // Create the target directory if it doesn't exist
-        if (!file_exists($this->path)) {
-            mkdir($this->path, 0777, true);
-        }
-
-        $movedFiles = [];
-        foreach ($filePaths as $filePath) {
-            if (!file_exists($filePath)) {
-                throw new \Exception("File not found: " . $filePath);
+        foreach ($jobs as $job) {
+            if ($job['isDir']) {
+                $this->copyDirectory($job['source'], $job['target']);
+            } elseif (!copy($job['source'], $job['target'])) {
+                throw new \Exception("Error copying file: " . $job['source']);
             }
-
-            $filename = basename($filePath);
-            $targetFile = rtrim($this->path, '/') . '/' . $filename;
-
-            if (!rename($filePath, $targetFile)) {
-                throw new \Exception("Error moving file: " . $filePath);
-            }
-
-            $movedFiles[] = $targetFile;
+            $copied[] = $job['target'];
         }
 
-        return $movedFiles;
+        return $copied;
+    }
+
+    /**
+     * Duplicates a single file without ever replacing anything.
+     *
+     * The file to duplicate is `$file` when given, otherwise `$file_path`. The copy is placed in
+     * `$path` when set, otherwise in the same directory as the original. The name is the original
+     * name with a number inserted before the extension ("report.pdf" => "report-1.pdf"). If that
+     * name is taken, the number increases ("report-2.pdf", "report-3.pdf", ...) until a free one
+     * is found.
+     *
+     * The free name is reserved atomically (exclusive create) before the data is copied, so two
+     * simultaneous calls can't end up with the same name. If the copy fails or its size doesn't
+     * match the original, the reserved file is removed. The original is never modified, and
+     * neither `$file_path` nor any other property is changed by this call.
+     *
+     * @param string|null $file Path of the file to duplicate. Null = use `$this->file_path`.
+     * @return string The path of the new file.
+     * @throws \Exception If no file is given, it is an array, a directory or unreadable,
+     *                    the destination is not usable, or the copy fails.
+     *
+     * @example
+     * ```php
+     * // Using the property
+     * $fm->file_path = '/var/www/uploads/report.pdf';
+     * $fm->duplicate();                                  // '/var/www/uploads/report-1.pdf'
+     *
+     * // Passing the file directly
+     * $fm->duplicate('/var/www/uploads/report.pdf');     // '/var/www/uploads/report-2.pdf'
+     * $fm->duplicate('/var/www/uploads/logo.png');       // '/var/www/uploads/logo-1.png'
+     *
+     * // Into another directory
+     * $fm->path = '/var/www/backups';
+     * $fm->duplicate('/var/www/uploads/report.pdf');     // '/var/www/backups/report-1.pdf'
+     * ```
+     */
+    public function duplicate(?string $file = null): string
+    {
+        // Argument wins; otherwise fall back to the class property
+        $source = $file ?? $this->file_path;
+
+        if (empty($source)) {
+            throw new \Exception("No file parameter provided and no default file available.");
+        }
+        if (is_array($source)) {
+            throw new \Exception("duplicate() supports one file at a time.");
+        }
+
+        if (is_dir($source)) {
+            throw new \Exception("duplicate() only supports files, not directories: " . $source);
+        }
+        if (!is_file($source)) {
+            throw new \Exception("File not found: " . $source);
+        }
+        if (!is_readable($source)) {
+            throw new \Exception("File is not readable: " . $source);
+        }
+
+        // Destination directory: $path if set, otherwise next to the original
+        $targetDir = !empty($this->path) ? rtrim($this->path, '/\\') : dirname($source);
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+            throw new \Exception("Failed to create directory: " . $targetDir);
+        }
+        if (!is_writable($targetDir)) {
+            throw new \Exception("Path is not writable: " . $targetDir);
+        }
+
+        $sourceName = basename($source);
+        $extension  = pathinfo($sourceName, PATHINFO_EXTENSION);
+        $baseName   = pathinfo($sourceName, PATHINFO_FILENAME);
+
+        // Dotfiles such as ".env" report an empty filename and "env" as the extension
+        if ($baseName === '') {
+            $baseName  = '.' . $extension;
+            $extension = '';
+        }
+        $suffix = $extension !== '' ? '.' . $extension : '';
+
+        // Find a free name and reserve it atomically ('x' fails if the file already exists)
+        $copyNumber = 1;
+        $target     = null;
+        while ($copyNumber <= 10000) {
+            $candidate = $targetDir . DIRECTORY_SEPARATOR . $baseName . '-' . $copyNumber . $suffix;
+            $handle    = @fopen($candidate, 'x');
+            if ($handle !== false) {
+                fclose($handle);
+                $target = $candidate;
+                break;
+            }
+            $copyNumber++;
+        }
+        if ($target === null) {
+            throw new \Exception("Unable to find a free name for the copy of: " . $sourceName);
+        }
+
+        // Copy into the reserved file and verify; clean up on any failure
+        if (!copy($source, $target)) {
+            @unlink($target);
+            throw new \Exception("Error duplicating file: " . $source);
+        }
+
+        clearstatcache(true, $source);
+        clearstatcache(true, $target);
+        if (filesize($target) !== filesize($source)) {
+            @unlink($target);
+            throw new \Exception("Duplicate verification failed (size mismatch): " . $source);
+        }
+
+        return $target;
     }
 
     /**
@@ -1180,20 +1391,14 @@ class LCS_FileManager {
 
         $deletedFiles = [];
         foreach ($filePaths as $filePath) {
-            if (!file_exists($filePath)) {
+            if (!file_exists($filePath) && !is_link($filePath)) {
                 throw new \Exception("File or directory not found: " . $filePath);
             }
 
-            if (is_dir($filePath)) {
-                // Handle directory deletion
-                if (!$this->deleteDirectory($filePath)) {
-                    throw new \Exception("Error deleting directory: " . $filePath);
-                }
-            } else {
-                // Handle file deletion
-                if (!unlink($filePath)) {
-                    throw new \Exception("Error deleting file: " . $filePath);
-                }
+            if (is_dir($filePath) && !is_link($filePath)) {
+                $this->removeDirectory($filePath); // symlinks inside are unlinked, never followed
+            } elseif (!unlink($filePath)) {
+                throw new \Exception("Error deleting file: " . $filePath);
             }
 
             $deletedFiles[] = $filePath;
@@ -1232,25 +1437,90 @@ class LCS_FileManager {
     }
 
     /**
-     * Renames the file.
+     * Renames a file or a directory in place (it stays in the same parent directory).
      *
-     * @param string $new_name New name for the file.
-     * @return string The new file path.
-     * @throws \Exception If the file path is invalid or rename fails.
+     * The item to rename is taken from `$file_path`. `$new_name` must be a bare name,
+     * not a path. After a successful rename, `$file_path` is updated to the new path so
+     * further operations can be chained.
+     *
+     * Name conflicts follow `$duplicateResolution` (else `$duplicate_resolution`):
+     * - reject    : throw if the name is taken.
+     * - overwrite : replace an existing FILE with the renamed file. Directories are never
+     *               replaced: a directory clash throws, like reject.
+     * - duplicate : keep both. The item gets the first free "name-1", "name-2", ... instead
+     *               (before the extension for files).
+     *
+     * @param string           $new_name            New name for the file or directory (no slashes).
+     * @param string|bool|null $duplicateResolution 'overwrite' | 'duplicate' | 'reject'. Null = use `$this->duplicate_resolution`.
+     *                                              (true/false are still accepted: overwrite/reject.)
+     * @return string The new path (it differs from `$new_name` when "duplicate" renumbered it).
+     * @throws \Exception If `$file_path` is missing/an array, the name is invalid, the name is taken and can't be
+     *                    resolved, or the rename fails.
+     *
+     * @example
+     * ```php
+     * $fm->file_path = '/var/www/uploads/old_folder';
+     * $fm->rename('new_folder');                  // '/var/www/uploads/new_folder'
+     *
+     * $fm->file_path = '/var/www/uploads/a.pdf';
+     * $fm->rename('report.pdf', 'overwrite');     // replaces an existing report.pdf, this call only
+     * $fm->rename('report.pdf', 'duplicate');     // '/var/www/uploads/report-1.pdf' if report.pdf exists
+     *
+     * $fm->duplicate_resolution = 'duplicate';
+     * $fm->rename('report.pdf');                  // uses the property
+     * ```
      */
-    public function rename($new_name) {
-        if (!$this->file_path || !file_exists($this->file_path)) {
-            throw new \Exception("File not found.");
+    public function rename($new_name, $duplicateResolution = null) {
+        if (empty($this->file_path)) {
+            throw new \Exception("File path not provided.");
+        }
+        if (is_array($this->file_path)) {
+            throw new \Exception("rename() supports one file or directory at a time.");
         }
 
-        $directory = dirname($this->file_path);
-        $targetFile = $directory . '/' . $new_name;
+        // Argument wins; otherwise fall back to the class property
+        $resolution = $this->resolveDuplicateResolution($duplicateResolution);
 
-        if (rename($this->file_path, $targetFile)) {
-            return $targetFile;
-        } else {
-            throw new \Exception("Error renaming file.");
+        // Validate the new name: bare name only
+        $new_name = trim((string) $new_name);
+        if (
+            $new_name === '' || $new_name === '.' || $new_name === '..' ||
+            strpbrk($new_name, "/\\\0") !== false
+        ) {
+            throw new \Exception("Invalid new name. Provide a name only, not a path.");
         }
+
+        $source = rtrim($this->file_path, '/\\');
+        if (!file_exists($source)) {
+            throw new \Exception("File or directory not found: " . $this->file_path);
+        }
+
+        $isDir  = is_dir($source);
+        $target = dirname($source) . DIRECTORY_SEPARATOR . $new_name;
+
+        if ($target === $source) {
+            return $target; // Nothing to do
+        }
+
+        // Name conflict (a case-only rename on Windows resolves to the same path, so it's allowed)
+        if (file_exists($target) && realpath($target) !== realpath($source)) {
+            if ($resolution === 'duplicate') {
+                $target = $this->uniqueTarget(dirname($source), $new_name, $isDir, []);
+            } elseif ($isDir || is_dir($target)) {
+                throw new \Exception("A file or directory named '{$new_name}' already exists. Directories are never overwritten; use the 'duplicate' resolution to keep both.");
+            } elseif ($resolution === 'reject') {
+                throw new \Exception("File '{$new_name}' already exists. Use the 'overwrite' or 'duplicate' resolution.");
+            } elseif (!unlink($target)) {
+                throw new \Exception("Unable to replace existing file: " . $target);
+            }
+        }
+
+        if (!rename($source, $target)) {
+            throw new \Exception("Error renaming " . ($isDir ? "directory" : "file") . ": " . $source);
+        }
+
+        $this->file_path = $target;
+        return $target;
     }
 
     /**
@@ -1442,26 +1712,33 @@ class LCS_FileManager {
      * @return string|false If $returnData is true, returns ZIP binary data. 
      *                      If false, returns the ZIP file path. Returns false on failure.
      */
-    public function zipData($data, $zipFileName = null, $returnData = false) 
+    public function zipData($data, $zipFileName = null, $returnData = false)
     {
-        // Set default ZIP file name if not provided
-        $zipFileName = $zipFileName ?? 'LCS_Data_' . date("Ymd_His") . '.zip';
+        // Keep only a bare file name, so it can't point outside the target directory
+        $zipFileName = basename($zipFileName ?? 'LCS_Data_' . date("Ymd_His") . '.zip');
 
-        // Determine ZIP file save path
-        if ($returnData || !$this->path) {
-            $zipFilePath = sys_get_temp_dir() . '/' . $zipFileName; // Default to temp dir
+        if ($returnData) {
+            // Unique temp file, so simultaneous requests can't collide
+            $zipFilePath = tempnam(sys_get_temp_dir(), 'lcszip_');
+            if ($zipFilePath === false) {
+                error_log("Error: Failed to create a temporary file for the ZIP archive.");
+                return false;
+            }
+        } elseif (!$this->path) {
+            $zipFilePath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $zipFileName;
         } else {
-            $zipFilePath = rtrim($this->path, '/') . '/' . $zipFileName;
+            $zipFilePath = rtrim($this->path, '/\\') . DIRECTORY_SEPARATOR . $zipFileName;
         }
 
         $zip = new \ZipArchive();
-        if ($zip->open($zipFilePath, \ZipArchive::CREATE) !== true) {
+        if ($zip->open($zipFilePath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
             error_log("Error: Failed to create ZIP file ($zipFilePath).");
             return false;
         }
 
         // Ensure $data is treated as an array
         $items = is_array($data) ? $data : [$data];
+        $added = 0;
 
         foreach ($items as $item) {
             if (!file_exists($item)) {
@@ -1472,11 +1749,9 @@ class LCS_FileManager {
             $basePath = realpath($item);
 
             if (is_file($item)) {
-                // If $item is a file, add it directly with its filename
-                $relativePath = basename($item);
-                $zip->addFile($basePath, $relativePath);
+                $zip->addFile($basePath, basename($item));
+                $added++;
             } elseif (is_dir($item)) {
-                // If $item is a directory, add its contents recursively
                 $files = new \RecursiveIteratorIterator(
                     new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS),
                     \RecursiveIteratorIterator::LEAVES_ONLY
@@ -1485,24 +1760,28 @@ class LCS_FileManager {
                 foreach ($files as $file) {
                     if (!$file->isDir()) {
                         $filePath = $file->getRealPath();
-                        // Generate relative path inside the ZIP
-                        $relativePath = substr($filePath, strlen($basePath) + 1);
-                        $zip->addFile($filePath, $relativePath);
+                        $zip->addFile($filePath, substr($filePath, strlen($basePath) + 1));
+                        $added++;
                     }
                 }
             }
         }
 
-        $zip->close();
+        $closed = $zip->close();
 
-        // Return the ZIP data as binary if $returnData is true
+        // An archive with no entries is never written, and close() fails if a file was unreadable
+        if ($added === 0 || !$closed) {
+            @unlink($zipFilePath);
+            error_log("Error: The ZIP archive was empty or could not be written ($zipFilePath).");
+            return false;
+        }
+
         if ($returnData) {
             $binaryData = file_get_contents($zipFilePath);
             unlink($zipFilePath); // Clean up temporary ZIP file
             return $binaryData;
         }
 
-        // Return the path of the saved ZIP file
         return $zipFilePath;
     }
 
@@ -1909,9 +2188,16 @@ class LCS_FileManager {
         $this->file_name = null;
         $this->file_path = null;
         $this->path = null;
+        $this->create_path = false;
+        $this->file_types = [];
         $this->file_limit = 10;
+        $this->max_file_size = 1024 * 1024 * 100;
+        $this->min_file_size = 0;
         $this->time_limit = 0;
         $this->rename = true;
+        $this->duplicate_resolution = 'reject';
+        $this->mark_valid = false;
+        $this->uploadedFileNames = [];
     }
 
     /**
@@ -1927,6 +2213,227 @@ class LCS_FileManager {
     public function clearOutputBuffers() {
         while (ob_get_level()) {
             ob_end_clean();
+        }
+    }
+
+    /**
+     * Resolves the effective duplicate resolution for a call.
+     *
+     * @param string|bool|null $resolution Per-call override. Null = use `$this->duplicate_resolution`.
+     *                                     For backward compatibility, true means 'overwrite' and false means 'reject'.
+     * @return string 'overwrite' | 'duplicate' | 'reject'
+     * @throws \Exception If the value is not a valid resolution.
+     */
+    private function resolveDuplicateResolution($resolution = null): string
+    {
+        if ($resolution === null) {
+            $resolution = $this->duplicate_resolution;
+        } elseif ($resolution === true) {
+            $resolution = 'overwrite';
+        } elseif ($resolution === false) {
+            $resolution = 'reject';
+        }
+
+        $resolution = strtolower(trim((string) $resolution));
+
+        if (!in_array($resolution, ['overwrite', 'duplicate', 'reject'], true)) {
+            throw new \Exception("Invalid duplicate resolution '{$resolution}'. Use overwrite, duplicate or reject.");
+        }
+
+        return $resolution;
+    }
+
+    /**
+     * Validates input and plans a copy/move: resolves every target path and name conflict up front.
+     *
+     * @param string|array|null $files      Path(s) of the items.
+     * @param string|null       $destination Destination directory.
+     * @param string|null       $resolution 'overwrite' | 'duplicate' | 'reject'.
+     * @param string            $op         'copy' or 'move' (used for limits and messages).
+     * @return array List of jobs: ['source' => string, 'target' => string, 'isDir' => bool]
+     * @throws \Exception If the input is invalid or a conflict can't be resolved under the chosen mode.
+     */
+    private function planTransfer($files, ?string $destination, ?string $resolution, string $op): array
+    {
+        $done = $op === 'copy' ? 'copied' : 'moved';
+
+        // Arguments win; otherwise fall back to the class properties
+        $files       = !empty($files) ? $files : $this->file_path;
+        $destination = !empty($destination) ? $destination : $this->path;
+        $resolution  = $this->resolveDuplicateResolution($resolution);
+
+        if (empty($files) || empty($destination)) {
+            throw new \Exception("File path or target directory not provided.");
+        }
+        if (!in_array($resolution, ['overwrite', 'duplicate', 'reject'], true)) {
+            throw new \Exception("Invalid duplicate resolution '{$resolution}'. Use overwrite, duplicate or reject.");
+        }
+
+        $sources = !is_array($files) ? [$files] : array_values($files);
+
+        if (count($sources) > $this->file_limit) {
+            throw new \Exception("Exceeded file {$op} limit of {$this->file_limit}.");
+        }
+
+        if (!is_dir($destination) && !mkdir($destination, 0777, true) && !is_dir($destination)) {
+            throw new \Exception("Failed to create directory: {$destination}");
+        }
+
+        $targetDir = rtrim($destination, '/\\');
+        $realDest  = realpath($destination);
+
+        $jobs    = [];
+        $claimed = []; // targets already planned in this batch
+
+        foreach ($sources as $source) {
+            if (!is_string($source) || !file_exists($source)) {
+                throw new \Exception("File not found: " . (is_string($source) ? $source : gettype($source)));
+            }
+
+            $source     = rtrim($source, '/\\');
+            $isDir      = is_dir($source);
+            $realSource = realpath($source);
+            $name       = basename($source);
+            $target     = $targetDir . DIRECTORY_SEPARATOR . $name;
+
+            if ($isDir && strpos($realDest . DIRECTORY_SEPARATOR, $realSource . DIRECTORY_SEPARATOR) === 0) {
+                throw new \Exception("Cannot {$op} a directory into itself: " . $source);
+            }
+
+            // The item is already where it would land
+            $sameSpot = file_exists($target) && realpath($target) === $realSource;
+            if ($sameSpot && ($op === 'move' || $resolution !== 'duplicate')) {
+                throw new \Exception("'{$name}' is already in '{$targetDir}'.");
+            }
+
+            $key = $this->targetKey($target);
+
+            if (isset($claimed[$key]) || file_exists($target)) {
+                if ($resolution === 'duplicate') {
+                    $target = $this->uniqueTarget($targetDir, $name, $isDir, $claimed);
+                    $key    = $this->targetKey($target);
+                } elseif ($isDir || is_dir($target)) {
+                    // Directories are never overwritten or merged
+                    throw new \Exception("Cannot {$op} '{$name}': a directory can't be overwritten, and '{$name}' already exists in '{$targetDir}'. Use the 'duplicate' resolution to keep both.");
+                } elseif (isset($claimed[$key])) {
+                    throw new \Exception("Two items would be {$done} to the same name: " . $name);
+                } elseif ($resolution === 'reject') {
+                    throw new \Exception("'{$name}' already exists in '{$targetDir}'.");
+                }
+                // else: 'overwrite' on an existing file, which is replaced
+            }
+
+            $claimed[$key] = true;
+            $jobs[] = ['source' => $source, 'target' => $target, 'isDir' => $isDir];
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * Finds a free "name-N.ext" (or "name-N" for directories) in `$dir`, avoiding names already planned.
+     *
+     * @param string $dir     Destination directory.
+     * @param string $name    Original base name of the item.
+     * @param bool   $isDir   Whether the item is a directory (no extension handling).
+     * @param array  $claimed Targets already planned in this batch (keys from targetKey()).
+     * @return string The full path of the free target.
+     * @throws \Exception If no free name is found within 10,000 attempts.
+     */
+    private function uniqueTarget(string $dir, string $name, bool $isDir, array $claimed): string
+    {
+        $extension = $isDir ? '' : pathinfo($name, PATHINFO_EXTENSION);
+        $baseName  = $isDir ? $name : pathinfo($name, PATHINFO_FILENAME);
+
+        // Dotfiles such as ".env" report an empty filename and "env" as the extension
+        if ($baseName === '') {
+            $baseName  = '.' . $extension;
+            $extension = '';
+        }
+        $suffix = $extension !== '' ? '.' . $extension : '';
+
+        for ($n = 1; $n <= 10000; $n++) {
+            $candidate = $dir . DIRECTORY_SEPARATOR . $baseName . '-' . $n . $suffix;
+            if (!file_exists($candidate) && !isset($claimed[$this->targetKey($candidate)])) {
+                return $candidate;
+            }
+        }
+
+        throw new \Exception("Unable to find a free name for: " . $name);
+    }
+
+    /**
+     * Normalizes a target path for comparing names (Windows paths are case-insensitive).
+     *
+     * @param string $path Path to normalize.
+     * @return string The comparison key.
+     */
+    private function targetKey(string $path): string
+    {
+        return DIRECTORY_SEPARATOR === '\\' ? strtolower($path) : $path;
+    }
+
+    /**
+     * Recursively copies a directory into a new `$target` directory.
+     *
+     * `$target` is always a fresh folder (directories are never overwritten or merged).
+     *
+     * @param string $source Directory to copy.
+     * @param string $target Directory to create and copy into.
+     * @throws \Exception On a symbolic link or a failed copy.
+     */
+    private function copyDirectory(string $source, string $target): void
+    {
+        if (!mkdir($target, 0777, true) && !is_dir($target)) {
+            throw new \Exception("Failed to create directory: " . $target);
+        }
+
+        foreach (scandir($source) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $from = $source . DIRECTORY_SEPARATOR . $entry;
+            $to   = $target . DIRECTORY_SEPARATOR . $entry;
+
+            if (is_link($from)) {
+                throw new \Exception("Symbolic links are not supported: " . $from);
+            }
+
+            if (is_dir($from)) {
+                $this->copyDirectory($from, $to);
+            } elseif (!copy($from, $to)) {
+                throw new \Exception("Error copying file: " . $from);
+            }
+        }
+    }
+
+    /**
+     * Recursively removes a directory. Symbolic links are unlinked, never followed.
+     *
+     * @param string $dir Directory to remove.
+     * @throws \Exception If something can't be removed.
+     */
+    private function removeDirectory(string $dir): void
+    {
+        foreach (scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $dir . DIRECTORY_SEPARATOR . $entry;
+
+            if (is_link($path) || is_file($path)) {
+                if (!unlink($path)) {
+                    throw new \Exception("Unable to remove file: " . $path);
+                }
+            } else {
+                $this->removeDirectory($path);
+            }
+        }
+
+        if (!rmdir($dir)) {
+            throw new \Exception("Unable to remove directory: " . $dir);
         }
     }
 
