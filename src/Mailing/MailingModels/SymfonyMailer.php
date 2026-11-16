@@ -1,7 +1,9 @@
 <?php
-use LCSNG\Tools\Debugging\Logs;
-use LCSNG\Tools\Mailing\MailingValidations;
+namespace LCSNG\Tools\Mailing\MailingModels;
 
+use LCSNG\Tools\Debugging\Logs;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingInitializer;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingValidator;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mime\Address;
@@ -9,19 +11,20 @@ use Symfony\Component\Mime\Address;
 /**
  * Class SymfonyMailer
  *
- * Extends MailingConfigs to provide mailing functionalities using Symfony Mailer.
+ * Extends MailingInitializer to provide mailing functionalities using Symfony Mailer.
  *
  * This class is responsible for configuring and sending emails through the Symfony Mailer component,
- * leveraging the settings and utilities provided by the MailingConfigs base class.
+ * leveraging the settings and utilities provided by the MailingInitializer base class.
  *
  * @package Mailing\SymfonyMailer
  */
-class SymfonyMailer extends MailingConfigs 
+class SymfonyMailer extends MailingInitializer
 {
     /**
      * SymfonyMailer constructor.
      *
-     * Initializes the mailer with the specified SMTP configuration.
+     * Stores the optional SMTP configuration. If required values are omitted,
+     * assign the public configuration properties before sending.
      *
      * @param string|null $host        The SMTP server hostname (e.g., "smtp.gmail.com").
      * @param string|null $username    The SMTP username, typically your full email address.
@@ -56,7 +59,9 @@ class SymfonyMailer extends MailingConfigs
             $this->encryption = $encryption;
         }
 
-        $this->initializeMailer('symfony');
+        if (!empty($this->host) && !empty($this->username) && !empty($this->password)) {
+            $this->initializeMailer('symfony');
+        }
     }
 
     /**
@@ -87,6 +92,10 @@ class SymfonyMailer extends MailingConfigs
      */
     public function sendSymfony(string|array $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
+        if (!$this->mailer) {
+            $this->initializeMailer('symfony');
+        }
+
         // 1) Normalize headers and attachments into arrays
         $headersArray    = is_array($headers) ? $headers : (strlen(preg_replace('/\s+/', ' ', trim($headers))) > 0 ? [ $headers ] : []);
         $attachmentsList = is_array($attachments) ? $attachments : (strlen(trim($attachments)) > 0 ? [ $attachments ] : []);
@@ -95,7 +104,7 @@ class SymfonyMailer extends MailingConfigs
         $toArray = !is_array($to) ? [$to] : $to;
         $toAddresses = [];
         foreach ( $toArray as $t ) {
-            list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+            list($recipientEmail, $recipientName) = MailingValidator::parseRecipient($t);
             // Set recipient
             $toAddresses[] = $recipientEmail;
         }
@@ -116,14 +125,14 @@ class SymfonyMailer extends MailingConfigs
 
         // 5) Process headersArray: if any “From:” or “Reply-To:”, override defaults; otherwise, collect as X-Headers
         foreach ($headersArray as $rawHeader) {
-            $mailerHeaderData = MailingValidations::extractMailHeaders($rawHeader);
+            $mailerHeaderData = MailingValidator::extractMailHeaders($rawHeader);
             if (array_key_first($mailerHeaderData) === 'from') {
-                $parsedEmail = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
-                $parsedName = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $parsedEmail = MailingValidator::extractAddress(array_values($mailerHeaderData)[0]);
+                $parsedName = MailingValidator::extractAddressName(array_values($mailerHeaderData)[0]);
                 $fromAddress = [ $parsedEmail => $parsedName ];
             } elseif (array_key_first($mailerHeaderData) === 'reply-to') {
-                $parsedEmail = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
-                $parsedName = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $parsedEmail = MailingValidator::extractAddress(array_values($mailerHeaderData)[0]);
+                $parsedName = MailingValidator::extractAddressName(array_values($mailerHeaderData)[0]);
                 $replyToAddress = [ $parsedEmail => $parsedName ];
             } else {
                 // Any other header: add as-is (e.g. "X-Custom-Header: Value")

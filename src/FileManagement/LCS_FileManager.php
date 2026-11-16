@@ -38,7 +38,7 @@ use LCSNG\Tools\FileManagement\LCS_FileComponents;
  * @property int               $time_limit        Max execution time in seconds for file operations (default 0 = no limit).
  * @property bool              $rename            Whether uploads are renamed (default true). When false, the original name is kept.
  * @property string            $duplicate_resolution What copy(), move(), upload() and rename() do when a name already exists: 'reject' (default), 'overwrite' (files only) or 'duplicate' ("name-N").
- * @property bool              $overwrite         @deprecated Alias for `$duplicate_resolution`: true = 'overwrite', false = 'reject'. Use `$duplicate_resolution`.
+ * @property bool              $overwrite         Legacy alias for `$duplicate_resolution` (true = 'overwrite', false = 'reject'). Use `$duplicate_resolution` instead.
  * @property bool              $mark_valid        When true, skips MIME type and size validation on upload (default false).
  * @property array             $uploadedFileNames Names of files saved by the last `upload()` call.
  *

@@ -2,27 +2,16 @@
 namespace LCSNG\Tools\Mailing;
 
 use LCSNG\Tools\Debugging\Logs;
-use LCSNG\Tools\Utils\LCS_DirOps;
-
-$mailingDependencies = [
-    'MailingConfigs.php',
-];
-foreach ($mailingDependencies as $dep) {
-    require_once $dep;
-}
-
-// Require all PHP files in "/MailingModels" using require_once
-LCS_DirOps::requireAll(__DIR__ . '/MailingModels');
-
-use MailingConfigs;
-use PHPMailer;
-use SymfonyMailer;
-use Mailgun;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingInitializer;
+use LCSNG\Tools\Mailing\MailingModels\Mailgun;
+use LCSNG\Tools\Mailing\MailingModels\PHPMailer;
+use LCSNG\Tools\Mailing\MailingModels\ResendMailer;
+use LCSNG\Tools\Mailing\MailingModels\SymfonyMailer;
 
 /**
  * Class LCS_Mailer
  *
- * A flexible utility class for sending emails using either Symfony Mailer or PHPMailer.
+ * A flexible utility class for sending emails using SMTP or API-based mailer models.
  *
  * Supported features:
  *  - Choice of backend: Symfony Mailer or PHPMailer (switchable at runtime)
@@ -36,6 +25,8 @@ use Mailgun;
  * Supported models:
  *  - 'phpmailer': Uses PHPMailer for sending emails (recommended for broad compatibility)
  *  - 'symfony': Uses Symfony Mailer component (recommended for modern PHP apps)
+ *  - 'mailgun': Uses the Mailgun API
+ *  - 'resend': Uses the Resend API
  *
  * Usage example:
  * ```php
@@ -68,9 +59,29 @@ use Mailgun;
  *     'Test via Symfony',
  *     '<p>This uses Symfony Mailer backend.</p>'
  * );
+ *
+ * // 4) Configure through public properties instead of constructor arguments:
+ * $mailer = new LCS_Mailer();
+ * $mailer->host = 'smtp.example.com';
+ * $mailer->username = 'user@example.com';
+ * $mailer->password = getenv('SMTP_PASSWORD');
+ * $mailer->model = 'phpmailer';
+ * $mailer->send('recipient@example.com', 'Hello', '<p>Configured by properties</p>');
+ *
+ * // API-based models use the same property configuration:
+ * $mailer = new LCS_Mailer();
+ * $mailer->model = 'resend';
+ * $mailer->apiKey = getenv('RESEND_API_KEY');
+ * $mailer->send('recipient@example.com', 'Hello', '<p>Sent with Resend</p>');
+ *
+ * // Individual model classes support property configuration too:
+ * $mailgun = new \LCSNG\Tools\Mailing\MailingModels\Mailgun();
+ * $mailgun->domain = getenv('MAILGUN_DOMAIN');
+ * $mailgun->apiKey = getenv('MAILGUN_API_KEY');
+ * $mailgun->sendMailgun('recipient@example.com', 'Hello', '<p>Sent with Mailgun</p>');
  * ```
  */
-class LCS_Mailer extends MailingConfigs 
+class LCS_Mailer extends MailingInitializer
 {
     /**
      * LCS_Mailer constructor.
@@ -127,7 +138,7 @@ class LCS_Mailer extends MailingConfigs
      * 
      * @param int $port The SMTP port to switch to (e.g., 587, 465, 25).
      * 
-     * @throws Exception if an unsupported port is specified.
+     * @throws \Exception if an unsupported port is specified.
      * 
      * Usage Example:
      * 

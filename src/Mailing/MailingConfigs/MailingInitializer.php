@@ -1,4 +1,6 @@
 <?php
+namespace LCSNG\Tools\Mailing\MailingConfigs;
+
 use LCSNG\Tools\Debugging\Logs;
 
 use Symfony\Component\Mailer\Mailer;
@@ -12,11 +14,11 @@ use PHPMailer\PHPMailer\Exception;
 use Mailgun\Mailgun;
 
 /**
- * Class MailingConfigs
+ * Class MailingInitializer
  *
- * Provides configuration management for mailing functionalities within the application.
- * This class is responsible for storing, retrieving, and validating various mailing-related
- * settings such as SMTP server details, sender information, and email templates.
+ * Stores mailing configuration and initializes the selected mailer implementation.
+ * Configuration can be supplied through the public properties or constructor arguments
+ * of the concrete mailer classes.
  *
  * Usage:
  * - Instantiate this class to access or modify mailing configurations.
@@ -26,36 +28,36 @@ use Mailgun\Mailgun;
  * @author  lcsng|JCFuniverse
  * @since   1.0.0
  */
-class MailingConfigs 
+class MailingInitializer 
 {
     /** @var string SMTP host (e.g. "smtp.example.com") */
-    protected $host;
+    public $host;
 
     /** @var string SMTP username (login) */
-    protected $username;
+    public $username;
 
     /** @var string SMTP password */
-    protected $password;
+    public $password;
 
     /** @var int SMTP port (e.g. 587, 465, 25) */
-    protected $port;
+    public $port;
     protected static $validPorts = [587, 465, 25];
 
     /** @var string Encrypt method: 'tls' or 'ssl' */
-    protected $encryption;
+    public $encryption;
 
     /** @var string */
-    protected $model = 'phpmailer';
+    public $model = 'phpmailer';
     protected static $validModels = ['phpmailer', 'symfony', 'mailgun', 'resend'];
 
     /** @var string $apiKey Mailing API key used for authentication. */
-    protected $apiKey;
+    public $apiKey;
 
     /** @var string $domain Mailing domain to be used for sending emails. */
-    protected $domain;
+    public $domain;
 
     /** @var string $endpoint Mailing API endpoint URL. */
-    protected $endpoint;
+    public $endpoint;
 
     protected $isApiBased = false;
 
@@ -121,8 +123,9 @@ class MailingConfigs
                     break;
                 }
                 // Instantiate the client.
-                $this->mailer = Resend::client($this->apiKey);
+                $this->mailer = \Resend::client($this->apiKey);
                 break;
+            default:
                 Logs::reportError("Unknown mailer model encountered during initialization.", 2);
                 break;
         }
@@ -157,7 +160,7 @@ class MailingConfigs
 
             $this->mailer->Port = $this->port;
             $this->mailer->CharSet = 'UTF-8';
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Logs::reportError("Mailer initialization failed: {$e->getMessage()}", 2);
         }
     }

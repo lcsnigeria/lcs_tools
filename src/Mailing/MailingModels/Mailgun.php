@@ -1,13 +1,17 @@
 <?php
-use LCSNG\Tools\Debugging\Logs;
-use LCSNG\Tools\Mailing\MailingValidations;
+namespace LCSNG\Tools\Mailing\MailingModels;
 
-class Mailgun extends MailingConfigs
+use LCSNG\Tools\Debugging\Logs;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingInitializer;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingValidator;
+
+class Mailgun extends MailingInitializer
 {
     /**
      * Mailgun constructor.
      *
-     * Initializes the Mailgun mailer with the provided configuration.
+     * Stores the optional Mailgun configuration. If required values are omitted,
+     * assign the public configuration properties before sending.
      *
      * @param string|null $domain   The Mailgun domain to use for sending emails.
      * @param string|null $apiKey   The Mailgun API key.
@@ -22,7 +26,9 @@ class Mailgun extends MailingConfigs
         $this->endpoint = $endpoint ?? 'https://api.mailgun.net';
         $this->model    = 'mailgun';
 
-        $this->initializeMailer('mailgun');
+        if (!empty($this->domain) && !empty($this->apiKey)) {
+            $this->initializeMailer('mailgun');
+        }
     }
 
     /**
@@ -43,8 +49,12 @@ class Mailgun extends MailingConfigs
      */
     public function sendMailgun(string $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''): bool
     {
+        if (!$this->mailer) {
+            $this->initializeMailer('mailgun');
+        }
+
         // Parse recipient
-        list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($to);
+        list($recipientEmail, $recipientName) = MailingValidator::parseRecipient($to);
         $toHeader = $recipientName ? "{$recipientName} <{$recipientEmail}>" : $recipientEmail;
 
         // Prepare message data
@@ -61,9 +71,9 @@ class Mailgun extends MailingConfigs
         foreach ($headersArray as $header) {
             $header = trim($header);
             if (stripos($header, 'Reply-To:') === 0) {
-                $messageData['h:Reply-To'] = MailingValidations::extractMailHeaders($header)['Reply-To'];
+                $messageData['h:Reply-To'] = MailingValidator::extractMailHeaders($header)['Reply-To'];
             } elseif (stripos($header, 'From:') === 0) {
-                $messageData['from'] = MailingValidations::extractMailHeaders($header)['From'];
+                $messageData['from'] = MailingValidator::extractMailHeaders($header)['From'];
             } elseif (strpos($header, ':') !== false) {
                 list($key, $value) = explode(':', $header, 2);
                 $messageData['h:' . trim($key)] = trim($value);

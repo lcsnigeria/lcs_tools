@@ -1,21 +1,25 @@
 <?php
+namespace LCSNG\Tools\Mailing\MailingModels;
+
 use LCSNG\Tools\Debugging\Logs;
-use LCSNG\Tools\Mailing\MailingValidations;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingInitializer;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingValidator;
 
 /**
  * Class PHPMailer
  *
- * Extends MailingConfigs to provide email sending functionality using PHPMailer.
+ * Extends MailingInitializer to provide email sending functionality using PHPMailer.
  * This class is responsible for configuring and sending emails based on the application's mailing settings.
  *
  * @package Mailing
  */
-class PHPMailer extends MailingConfigs
+class PHPMailer extends MailingInitializer
 {
     /**
      * PHPMailer constructor.
      *
-     * Initializes the mailer with the specified SMTP configuration.
+     * Stores the optional SMTP configuration. If required values are omitted,
+     * assign the public configuration properties before sending.
      *
      * @param string|null $host        The SMTP server hostname (e.g., "smtp.gmail.com").
      * @param string|null $username    The SMTP username, typically your full email address.
@@ -50,7 +54,9 @@ class PHPMailer extends MailingConfigs
             $this->encryption = $encryption;
         }
 
-        $this->initializeMailer('phpmailer');
+        if (!empty($this->host) && !empty($this->username) && !empty($this->password)) {
+            $this->initializeMailer('phpmailer');
+        }
     }
 
     /**
@@ -67,7 +73,7 @@ class PHPMailer extends MailingConfigs
      * @param string|array $attachments Optional. A single file path as a string or an array of file paths to be attached to the email.
      * @return bool Returns true if the email was successfully sent, false otherwise.
      * 
-     * @throws Exception if PHPMailer encounters an error while sending the email.
+     * @throws \Exception if PHPMailer encounters an error while sending the email.
      * 
      * Usage Examples:
      * 
@@ -94,13 +100,17 @@ class PHPMailer extends MailingConfigs
      */
     public function sendPHPMailer(string|array $to, string $subject, string $htmlBody, array|string $headers = '', array|string $attachments = ''):bool
     {
+        if (!$this->mailer) {
+            $this->initializeMailer('phpmailer');
+        }
+
         try {
             $toArray = !is_array($to) ? [$to] : $to;
             foreach ($toArray as $t) {
                 try {
-                    list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+                    list($recipientEmail, $recipientName) = MailingValidator::parseRecipient($t);
                     $this->mailer->addAddress($recipientEmail, $recipientName);
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     Logs::reportError("Invalid recipient $t: {$e->getMessage()}", 1);
                 }
             }
@@ -122,7 +132,7 @@ class PHPMailer extends MailingConfigs
             // Send email
             $this->mailer->send();
             return true;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $toStr = is_array($to) ? implode(', ', $to) : $to;
             Logs::reportError("Email could not be sent to $toStr. Error: {$this->mailer->ErrorInfo}", 1);
             return false;
@@ -145,14 +155,14 @@ class PHPMailer extends MailingConfigs
         $headers = is_array($headers) ? $headers : [$headers];
 
         foreach ($headers as $key => $header) {
-            $mailerHeaderData = MailingValidations::extractMailHeaders($header);
+            $mailerHeaderData = MailingValidator::extractMailHeaders($header);
             if (array_key_first($mailerHeaderData) === 'from') {
-                $sender['email'] = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
-                $sender['name'] = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $sender['email'] = MailingValidator::extractAddress(array_values($mailerHeaderData)[0]);
+                $sender['name'] = MailingValidator::extractAddressName(array_values($mailerHeaderData)[0]);
                 unset($headers[$key]);
             } elseif (array_key_first($mailerHeaderData) === 'reply-to') {
-                $replyTo['email'] = MailingValidations::extractAddress(array_values($mailerHeaderData)[0]);
-                $replyTo['name'] = MailingValidations::extractAddressName(array_values($mailerHeaderData)[0]);
+                $replyTo['email'] = MailingValidator::extractAddress(array_values($mailerHeaderData)[0]);
+                $replyTo['name'] = MailingValidator::extractAddressName(array_values($mailerHeaderData)[0]);
                 unset($headers[$key]);
             }
         }
@@ -185,7 +195,7 @@ class PHPMailer extends MailingConfigs
     {
         $headers = is_array($headers) ? $headers : [$headers];
         foreach ($headers as $header) {
-            $mailerHeaderData = MailingValidations::extractMailHeaders($header);
+            $mailerHeaderData = MailingValidator::extractMailHeaders($header);
             $this->mailer->addCustomHeader(
                 trim(array_key_first($mailerHeaderData)), 
                 trim(array_values($mailerHeaderData)[0])

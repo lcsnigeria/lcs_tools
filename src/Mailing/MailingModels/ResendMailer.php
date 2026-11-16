@@ -1,10 +1,9 @@
 <?php
-namespace LCSNG\Tools\Mailing;
+namespace LCSNG\Tools\Mailing\MailingModels;
 
 use LCSNG\Tools\Debugging\Logs;
-use LCSNG\Tools\Mailing\MailingValidations;
-
-use MailingConfigs;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingInitializer;
+use LCSNG\Tools\Mailing\MailingConfigs\MailingValidator;
 
 /**
  * Class ResendMailer
@@ -12,13 +11,15 @@ use MailingConfigs;
  * Implements the Resend mailing model for sending emails via the Resend API.
  * Compatible with the LCS_Mailer interface.
  */
-class ResendMailer extends MailingConfigs
+class ResendMailer extends MailingInitializer
 {
     /**
      * Resend constructor.
      *
      * @param string|null $apiKey   The Resend API key.
      * @param string|null $endpoint The Resend API endpoint (default: "https://api.resend.com/emails").
+     *
+     * If the API key is omitted, set the public configuration properties before sending.
      */
     public function __construct(?string $apiKey = null, ?string $endpoint = null)
     {
@@ -26,7 +27,9 @@ class ResendMailer extends MailingConfigs
         $this->endpoint = $endpoint ?? 'https://api.resend.com/emails';
         $this->model    = 'resend';
 
-        $this->initializeMailer('resend');
+        if (!empty($this->apiKey)) {
+            $this->initializeMailer('resend');
+        }
     }
 
     /**
@@ -39,7 +42,7 @@ class ResendMailer extends MailingConfigs
      * @param string|string[]       $attachments  (Optional) File path or array of file paths to attach.
      *
      * @return bool True on success, false on failure.
-     * @throws InvalidArgumentException If recipient parsing fails or directory/file checks fail.
+     * @throws \InvalidArgumentException If recipient parsing fails or directory/file checks fail.
      */
     public function sendResend(
         string|array $to,
@@ -49,11 +52,15 @@ class ResendMailer extends MailingConfigs
         array|string $attachments = []
     ): bool {
         try {
+            if (!$this->mailer) {
+                $this->initializeMailer('resend');
+            }
+
             // Parse and validate recipient
             $toArray = !is_array($to) ? [$to] : $to;
             $toAddresses = [];
             foreach ( $toArray as $t ) {
-                list($recipientEmail, $recipientName) = MailingValidations::parseRecipient($t);
+                list($recipientEmail, $recipientName) = MailingValidator::parseRecipient($t);
                 if (empty($recipientEmail) || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
                     throw new \InvalidArgumentException("sendResend(): Invalid recipient email '{$recipientEmail}'.");
                 }
@@ -80,12 +87,12 @@ class ResendMailer extends MailingConfigs
                 : (trim((string)$headers) !== '' ? [trim($headers)] : []);
             foreach ($headersList as $header) {
                 if (stripos(strtolower($header), 'reply-to:') === 0) {
-                    $parsed = MailingValidations::extractMailHeaders($header);
+                    $parsed = MailingValidator::extractMailHeaders($header);
                     if (!empty($parsed['reply-to'])) {
                         $payload['reply_to'] = $parsed['reply-to'];
                     }
                 } elseif (stripos(strtolower($header), 'from:') === 0) {
-                    $parsed = MailingValidations::extractMailHeaders($header);
+                    $parsed = MailingValidator::extractMailHeaders($header);
                     if (!empty($parsed['from'])) {
                         $payload['from'] = $parsed['from'];
                     }

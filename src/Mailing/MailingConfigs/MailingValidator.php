@@ -1,16 +1,16 @@
 <?php
-namespace LCSNG\Tools\Mailing;
+namespace LCSNG\Tools\Mailing\MailingConfigs;
 
 use LCSNG\Tools\Debugging\Logs;
 
 /**
- * Class MailingValidations
+ * Class MailingValidator
  *
- * Provides validation methods and utilities for mailing-related operations.
+ * Provides validation and parsing utilities for mailing-related data.
  *
  * @package Mailing
  */
-class MailingValidations 
+class MailingValidator 
 {
     /**
      * Parses a recipient string like:
