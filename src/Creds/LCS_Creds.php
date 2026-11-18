@@ -153,8 +153,7 @@ final class LCS_Creds {
     /**
      * Generate a random code of specified length and character type.
      *
-     * @param int|string|null $arg1    The length of the code or character type ('numbers', 'letters', 'random_bytes'). Default is 32.
-     * @param int|string|null $arg2    The type of characters to include in the code or length if $arg1 is character type. Default is 'random_bytes'.
+     * @param int|string|null ...$args The length and/or character type ('numbers', 'letters', 'random_bytes').
      * @return string|bool The generated code or false if an invalid character type is provided.
      */
     public static function generateCode(...$args) {
@@ -418,4 +417,219 @@ final class LCS_Creds {
             );
         }
     }
+
+    /**
+     * Set a configuration value in an INI file.
+     *
+     * Supports root-level keys, case-insensitive matching of existing keys,
+     * and colon-qualified keys (e.g., "section:key") to target or create a specific section.
+     *
+     * Note: Because this method uses `parse_ini_file()` to read and rewrite the file,
+     * any existing inline or standalone comments (`;` or `#`) in the file will be stripped
+     * when changes are saved.
+     *
+     * @param string $configsFilePath The path to the INI configuration file.
+     * @param string $key The configuration key to set (use "section:key" for a specific section).
+     * @param mixed $value The value to assign to the configuration key (string, int, float, bool, or null).
+     *
+     * @throws \InvalidArgumentException If the configuration file does not exist or key format is invalid.
+     * @throws \RuntimeException If the configuration file cannot be parsed or written.
+     *
+     * @example
+     * ```php
+     * // Update or add a root-level key (or first matching key across sections)
+     * LCS_Creds::setFileConfig('/path/to/.configs', 'maintenance_mode', true);
+     *
+     * // Set a key inside a specific [section] (creates the section if it doesn't exist)
+     * LCS_Creds::setFileConfig('/path/to/.configs', 'database:host', '127.0.0.1');
+     * LCS_Creds::setFileConfig('/path/to/.configs', 'database:port', 3306);
+     * ```
+     */
+    public static function setFileConfig(string $configsFilePath, string $key, mixed $value): void
+    {
+        if (!is_file($configsFilePath) || !is_readable($configsFilePath)) {
+            throw new \InvalidArgumentException("Configuration file not found or not readable: {$configsFilePath}");
+        }
+
+        $configs = parse_ini_file($configsFilePath, true, INI_SCANNER_TYPED);
+        if ($configs === false) {
+            throw new \RuntimeException("Failed to parse configuration file: {$configsFilePath}");
+        }
+
+        // A colon-qualified key targets a key in a specific section.
+        if (str_contains($key, ':')) {
+            [$sectionName, $configKey] = explode(':', $key, 2);
+            $sectionName = trim($sectionName);
+            $configKey = trim($configKey);
+
+            if ($sectionName === '' || $configKey === '') {
+                throw new \InvalidArgumentException("Invalid section:key format provided: {$key}");
+            }
+
+            $section = null;
+            foreach ($configs as $existingSection => $sectionValues) {
+                if (is_array($sectionValues) && strcasecmp((string) $existingSection, $sectionName) === 0) {
+                    $section = $existingSection;
+                    break;
+                }
+            }
+
+            if ($section === null) {
+                $section = $sectionName;
+                $configs[$section] = [];
+            }
+
+            $existingKey = null;
+            foreach ($configs[$section] as $configuredKey => $configuredValue) {
+                if (strcasecmp((string) $configuredKey, $configKey) === 0) {
+                    $existingKey = $configuredKey;
+                    break;
+                }
+            }
+
+            $configs[$section][$existingKey ?? $configKey] = $value;
+        } else {
+            // Update the first matching key, regardless of its casing or section.
+            $updated = false;
+            foreach ($configs as $section => &$values) {
+                if (is_array($values)) {
+                    foreach ($values as $configuredKey => $configuredValue) {
+                        if (strcasecmp((string) $configuredKey, $key) === 0) {
+                            $values[$configuredKey] = $value;
+                            $updated = true;
+                            break 2;
+                        }
+                    }
+                } elseif (strcasecmp((string) $section, $key) === 0) {
+                    $values = $value;
+                    $updated = true;
+                    break;
+                }
+            }
+            unset($values);
+
+            if (!$updated) {
+                $configs[$key] = $value;
+            }
+        }
+
+        // Separate root keys and sections so root keys are always written at the top
+        $rootContent = '';
+        $sectionContent = '';
+
+        foreach ($configs as $section => $values) {
+            if (is_array($values)) {
+                $sectionContent .= "\n[{$section}]\n";
+                foreach ($values as $subKey => $subValue) {
+                    $formatted = self::formatIniValue($subValue);
+                    $sectionContent .= "{$subKey} = {$formatted}\n";
+                }
+            } else {
+                $formatted = self::formatIniValue($values);
+                $rootContent .= "{$section} = {$formatted}\n";
+            }
+        }
+
+        $newContent = ltrim($rootContent . $sectionContent, "\n");
+
+        // Write the updated content back to the file with an exclusive lock
+        if (file_put_contents($configsFilePath, $newContent, LOCK_EX) === false) {
+            throw new \RuntimeException("Failed to write updated configuration to file: {$configsFilePath}");
+        }
+    }
+
+    /**
+     * Get a configuration value from an INI file.
+     *
+     * Supports case-insensitive lookup of root-level keys, first-occurrence lookup
+     * across sections, or targeted lookup using "section:key" syntax.
+     *
+     * @param string $configsFilePath The path to the INI configuration file.
+     * @param string $key The configuration key to retrieve (use "section:key" for a specific section).
+     * @param mixed $default Fallback value returned if the key does not exist.
+     *
+     * @return mixed The typed value of the configuration key, or $default if not found.
+     *
+     * @throws \InvalidArgumentException If the configuration file does not exist.
+     * @throws \RuntimeException If the configuration file cannot be parsed.
+     *
+     * @example
+     * ```php
+     * // Retrieve a root key (or first matching key across sections)
+     * \$isMaintenance = LCS_Creds::getFileConfig('/path/to/.configs', 'maintenance_mode', false);
+     *
+     * // Retrieve a key from a specific [section]
+     * \$dbHost = LCS_Creds::getFileConfig('/path/to/.configs', 'database:host', 'localhost');
+     * ```
+     */
+    public static function getFileConfig(string $configsFilePath, string $key, mixed $default = null): mixed
+    {
+        if (!is_file($configsFilePath) || !is_readable($configsFilePath)) {
+            throw new \InvalidArgumentException("Configuration file not found or not readable: {$configsFilePath}");
+        }
+
+        $configs = parse_ini_file($configsFilePath, true, INI_SCANNER_TYPED);
+        if ($configs === false) {
+            throw new \RuntimeException("Failed to parse configuration file: {$configsFilePath}");
+        }
+
+        if (str_contains($key, ':')) {
+            [$sectionName, $configKey] = explode(':', $key, 2);
+            $sectionName = trim($sectionName);
+            $configKey = trim($configKey);
+
+            foreach ($configs as $section => $values) {
+                if (is_array($values) && strcasecmp((string) $section, $sectionName) === 0) {
+                    foreach ($values as $configuredKey => $value) {
+                        if (strcasecmp((string) $configuredKey, $configKey) === 0) {
+                            return $value;
+                        }
+                    }
+                    return $default;
+                }
+            }
+
+            return $default;
+        }
+
+        // Search in file order so an unqualified key returns its first occurrence.
+        foreach ($configs as $section => $values) {
+            if (is_array($values)) {
+                foreach ($values as $configuredKey => $value) {
+                    if (strcasecmp((string) $configuredKey, $key) === 0) {
+                        return $value;
+                    }
+                }
+            } elseif (strcasecmp((string) $section, $key) === 0) {
+                return $values;
+            }
+        }
+
+        return $default;
+    }
+
+    /**
+     * Format a PHP value safely for INI file serialization.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private static function formatIniValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        if ($value === null) {
+            return 'null';
+        }
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        // Escape backslashes and double quotes inside string values
+        $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $value);
+        return "\"{$escaped}\"";
+    }
+
+
 }
