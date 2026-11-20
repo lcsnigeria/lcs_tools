@@ -534,6 +534,75 @@ class LCS_FileManager {
     }
 
     /**
+     * Retrieves the file data from a given file path or file array.
+     *
+     * @param string|array|null $files The file path or file array.
+     * @return array The normalized file data.
+     * @throws \Exception If the file parameter is invalid or the file does not exist.
+     * @example
+     * ```php
+     * // Example 1: Using existing file path
+     * $fileManager = new LCS_FileManager();
+     * $fileData = $fileManager->getFileData('/path/to/file.txt');
+     * // Output:
+     * // [
+     * //     [
+     * //         'name' => 'file.txt',
+     * //         'type' => 'text/plain',
+     * //         'tmp_name' => '/path/to/file.txt',
+     * //         'error' => 0,
+     * //         'size' => 1024
+     * //     ]
+     * // ]
+     * 
+     * // Example 2: Using a normalized file array
+     * $fileArray = $_FILES['uploaded_files'];
+     * $fileManager = new LCS_FileManager();
+     * $fileData = $fileManager->getFileData($fileArray);
+     * // Output:
+     * // [
+     * //     [
+     * //         'name' => 'file.txt',
+     * //         'type' => 'text/plain',
+     * //         'tmp_name' => '/tmp/phpA1.tmp',
+     * //         'error' => 0,
+     * //         'size' => 1024
+     * //     ]
+     * // ]
+     * ```
+     */
+    public function getFileData($files = null) {
+        if (is_null($files) || empty($files)) {
+            if ($this->files) {
+                $files = $this->files;
+            } elseif ($this->file_path) {
+                $files = $this->file_path;
+            } else {
+                throw new \Exception("No file parameter provided and no default file available.");
+            }
+        }
+
+        if (is_array($files)) {
+            return $this->normalizeFiles($files);
+        } elseif (is_string($files)) {
+            if (!file_exists($files)) {
+                throw new \Exception("File does not exist: " . $files);
+            }
+            return [
+                [
+                    'name' => basename($files),
+                    'type' => mime_content_type($files),
+                    'tmp_name' => $files,
+                    'error' => 0,
+                    'size' => filesize($files)
+                ]
+            ];
+        } else {
+            throw new \Exception("Invalid file parameter provided.");
+        }
+    }
+
+    /**
      * Retrieves the file name from a given file path or file array.
      *
      * @param string|array|null $files The file path or file array.
