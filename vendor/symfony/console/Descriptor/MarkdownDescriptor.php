@@ -60,7 +60,7 @@ class MarkdownDescriptor extends Descriptor
         if ($option->isNegatable()) {
             $name .= '|--no-'.$option->getName();
         }
-        if ($option->getShortcut()) {
+        if (null !== $option->getShortcut()) {
             $name .= '|-'.str_replace('|', '|-', $option->getShortcut()).'';
         }
 
@@ -77,7 +77,7 @@ class MarkdownDescriptor extends Descriptor
 
     protected function describeInputDefinition(InputDefinition $definition, array $options = []): void
     {
-        if ($showArguments = \count($definition->getArguments()) > 0) {
+        if ($showArguments = $definition->getArguments()) {
             $this->write('### Arguments');
             foreach ($definition->getArguments() as $argument) {
                 $this->write("\n\n");

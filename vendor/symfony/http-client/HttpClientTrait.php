@@ -13,7 +13,8 @@ namespace Symfony\Component\HttpClient;
 
 use Symfony\Component\HttpClient\Exception\InvalidArgumentException;
 use Symfony\Component\HttpClient\Exception\TransportException;
-use Symfony\Component\HttpClient\Response\StreamableInterface;
+use Symfony\Component\HttpClient\Internal\ArrayBodyCaster;
+use Symfony\Component\HttpClient\Internal\Dechunker;
 use Symfony\Component\HttpClient\Response\StreamWrapper;
 use Symfony\Component\Mime\MimeTypes;
 
@@ -177,6 +178,16 @@ trait HttpClientTrait
             // Validate and resolve URL
             $url = self::parseUrl($url, $options['query']);
             $url = self::resolveUrl($url, $baseUri, $defaultOptions['query'] ?? []);
+
+            // Send the user info of the URL as an Authorization header, so that it never ends up in reported URLs
+            if (false !== $i = strrpos($url['authority'], '@')) {
+                if (!isset($options['normalized_headers']['authorization']) && !isset($options['auth_ntlm'])) {
+                    $userinfo = explode(':', substr($url['authority'], 2, $i - 2), 2);
+                    $options['normalized_headers']['authorization'] = ['Authorization: Basic '.base64_encode(rawurldecode($userinfo[0]).':'.rawurldecode($userinfo[1] ?? ''))];
+                }
+
+                $url['authority'] = '//'.substr($url['authority'], 1 + $i);
+            }
         }
 
         // Finalize normalization of options
@@ -197,6 +208,12 @@ trait HttpClientTrait
     private static function mergeDefaultOptions(array $options, array $defaultOptions, bool $allowExtraOptions = false): array
     {
         $options['normalized_headers'] = self::normalizeHeaders($options['headers'] ?? []);
+
+        if ($options['extra']['skip_default_credentials'] ?? false) {
+            // Set by NoPrivateNetworkHttpClient on redirects to other origins, for the decorated client and the ones it decorates
+            $options['normalized_headers'] += ['authorization' => [], 'cookie' => []];
+            $options += ['auth_basic' => null, 'auth_bearer' => null, 'auth_ntlm' => null];
+        }
 
         if ($defaultOptions['headers'] ?? false) {
             $options['normalized_headers'] += self::normalizeHeaders($defaultOptions['headers']);
@@ -257,6 +274,11 @@ trait HttpClientTrait
             }
 
             if ('auth_ntlm' === $name) {
+                if (null === $v) {
+                    // Decorators can unset NTLM credentials without knowing if the decorated client supports NTLM
+                    continue;
+                }
+
                 if (!\extension_loaded('curl')) {
                     $msg = 'try installing the "curl" extension to use "%s" instead.';
                 } else {
@@ -340,22 +362,13 @@ trait HttpClientTrait
             static $cookie;
 
             $streams = [];
-            array_walk_recursive($body, $caster = static function (&$v) use (&$caster, &$streams, &$cookie) {
-                if (\is_resource($v) || $v instanceof StreamableInterface) {
-                    $cookie = hash('xxh128', $cookie ??= random_bytes(8), true);
-                    $k = substr(strtr(base64_encode($cookie), '+/', '-_'), 0, -2);
-                    $streams[$k] = $v instanceof StreamableInterface ? $v->toStream(false) : $v;
-                    $v = $k;
-                } elseif (\is_object($v)) {
-                    if ($vars = get_object_vars($v)) {
-                        array_walk_recursive($vars, $caster);
-                        $v = $vars;
-                    } elseif ($v instanceof \Stringable) {
-                        $v = (string) $v;
-                    }
-                }
+            $body = ArrayBodyCaster::cast($body, static function ($stream) use (&$streams, &$cookie) {
+                $cookie = hash('xxh128', $cookie ??= random_bytes(8), true);
+                $k = substr(strtr(base64_encode($cookie), '+/', '-_'), 0, -2);
+                $streams[$k] = $stream;
+
+                return $k;
             });
-            $caster = null;
 
             if ('' === $body = http_build_query($body, '', '&')) {
                 return '';
@@ -509,14 +522,15 @@ trait HttpClientTrait
 
     private static function dechunk(string $body): string
     {
-        $h = fopen('php://temp', 'w+');
-        stream_filter_append($h, 'dechunk', \STREAM_FILTER_WRITE);
-        fwrite($h, $body);
-        $body = stream_get_contents($h, -1, 0);
-        rewind($h);
-        ftruncate($h, 0);
+        $dechunker = new Dechunker();
 
-        if (fwrite($h, '-') && '' !== stream_get_contents($h, -1, 0)) {
+        try {
+            $body = $dechunker->dechunk($body);
+        } catch (TransportException) {
+            $dechunker = null;
+        }
+
+        if (!$dechunker?->isFinished()) {
             throw new TransportException('Request body has broken chunked encoding.');
         }
 
@@ -839,8 +853,10 @@ trait HttpClientTrait
             return $proxy;
         }
 
-        // Ignore HTTP_PROXY except on the CLI to work around httpoxy set of vulnerabilities
-        $proxy = $_SERVER['http_proxy'] ?? (\in_array(\PHP_SAPI, ['cli', 'phpdbg'], true) ? $_SERVER['HTTP_PROXY'] ?? null : null) ?? $_SERVER['all_proxy'] ?? $_SERVER['ALL_PROXY'] ?? null;
+        // Ignore HTTP_PROXY except on the CLI to work around httpoxy set of vulnerabilities, and read it from
+        // the environment there, since HTTP workers that run on the CLI put request headers in $_SERVER
+        $httpProxy = \in_array(\PHP_SAPI, ['cli', 'phpdbg'], true) ? $_ENV['HTTP_PROXY'] ?? getenv('HTTP_PROXY', true) : false;
+        $proxy = $_SERVER['http_proxy'] ?? (false !== $httpProxy ? $httpProxy : null) ?? $_SERVER['all_proxy'] ?? $_SERVER['ALL_PROXY'] ?? null;
 
         if ('https:' === $url['scheme']) {
             $proxy = $_SERVER['https_proxy'] ?? $_SERVER['HTTPS_PROXY'] ?? $proxy;

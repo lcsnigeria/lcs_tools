@@ -16,7 +16,7 @@ trait Countries
      *
      * @var string
      */
-    private static string $countriesDataFile = __DIR__ . '/../WDJson/Countries.json';
+    private static string $countriesDataFile = __DIR__ . '/../WDDB/Countries.json';
 
     /**
      * Retrieve an array of all countries with their details.

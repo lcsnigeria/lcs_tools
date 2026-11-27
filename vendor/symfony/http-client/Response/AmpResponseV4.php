@@ -45,6 +45,7 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
 
     private static string $nextId = 'a';
 
+    private Canary $countCanary;
     private ?array $options;
     private \Closure $onProgress;
 
@@ -104,10 +105,15 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
         $this->id = $id = self::$nextId;
         self::$nextId = str_increment(self::$nextId);
         Loop::defer(static function () use ($request, $multi, $id, &$info, &$headers, $canceller, &$options, $onProgress, &$handle, $logger, &$pause) {
+            if (!isset($multi->openHandles[$id])) {
+                return null;
+            }
+
             return new Coroutine(self::generateResponse($request, $multi, $id, $info, $headers, $canceller, $options, $onProgress, $handle, $logger, $pause));
         });
 
-        $info['pause_handler'] = static function (float $duration) use (&$throttleWatcher, &$pauseDeferred, &$pause) {
+        $pauseExpiry = &$this->pauseExpiry;
+        $info['pause_handler'] = static function (float $duration) use (&$throttleWatcher, &$pauseDeferred, &$pause, &$pauseExpiry) {
             if (null !== $throttleWatcher) {
                 Loop::cancel($throttleWatcher);
             }
@@ -115,10 +121,12 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
             $pause = $pauseDeferred->promise();
 
             if ($duration <= 0) {
+                $pauseExpiry = min($pauseExpiry, hrtime(true) / 1E9);
                 $deferred = $pauseDeferred;
                 $pauseDeferred = new Deferred();
                 $deferred->resolve();
             } else {
+                $pauseExpiry = hrtime(true) / 1E9 + $duration;
                 $throttleWatcher = Loop::delay(ceil(1000 * $duration), static function () use (&$pauseDeferred) {
                     $deferred = $pauseDeferred;
                     $pauseDeferred = new Deferred();
@@ -130,6 +138,14 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
         $multi->lastTimeout = null;
         $multi->openHandles[$id] = $id;
         ++$multi->responseCount;
+        // Decorators can call __destruct() before PHP does, so the count is decremented when the response is freed
+        $this->countCanary = new Canary(static function () use ($multi) {
+            // Clear the DNS cache when all requests completed
+            if (0 >= --$multi->responseCount) {
+                $multi->responseCount = 0;
+                $multi->dnsCache = [];
+            }
+        });
 
         $this->canary = new Canary(static function () use ($canceller, $multi, $id) {
             $canceller->cancel();
@@ -154,15 +170,7 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
 
     public function __destruct()
     {
-        try {
-            $this->doDestruct();
-        } finally {
-            // Clear the DNS cache when all requests completed
-            if (0 >= --$this->multi->responseCount) {
-                $this->multi->responseCount = 0;
-                $this->multi->dnsCache = [];
-            }
-        }
+        $this->doDestruct();
     }
 
     private static function schedule(self $response, array &$runningResponses): void
@@ -219,6 +227,10 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
     private static function generateResponse(Request $request, AmpClientStateV4 $multi, string $id, array &$info, array &$headers, CancellationTokenSource $canceller, array &$options, \Closure $onProgress, &$handle, ?LoggerInterface $logger, Promise &$pause): \Generator
     {
         $request->setInformationalResponseHandler(static function (Response $response) use ($multi, $id, &$info, &$headers) {
+            if (!isset($multi->openHandles[$id])) {
+                return;
+            }
+
             self::addResponseHeaders($response, $info, $headers);
             $multi->handlesActivity[$id][] = new InformationalChunk($response->getStatus(), $response->getHeaders());
             self::stopLoop();
@@ -233,6 +245,10 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
             }
 
             $options = null;
+
+            if (!isset($multi->openHandles[$id])) {
+                return;
+            }
 
             $multi->handlesActivity[$id][] = new FirstChunk();
 
@@ -255,7 +271,13 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
 
                 yield $pause;
 
-                if (null === $data = yield $body->read()) {
+                $data = yield $body->read();
+
+                if (!isset($multi->openHandles[$id])) {
+                    return;
+                }
+
+                if (null === $data) {
                     break;
                 }
 
@@ -266,8 +288,10 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
             $multi->handlesActivity[$id][] = null;
             $multi->handlesActivity[$id][] = null;
         } catch (\Throwable $e) {
-            $multi->handlesActivity[$id][] = null;
-            $multi->handlesActivity[$id][] = $e;
+            if (isset($multi->openHandles[$id])) {
+                $multi->handlesActivity[$id][] = null;
+                $multi->handlesActivity[$id][] = $e;
+            }
         } finally {
             $info['download_content_length'] = $info['size_download'];
         }
@@ -352,7 +376,7 @@ final class AmpResponseV4 implements ResponseInterface, StreamableInterface
                 $request->addHeader($name, $value);
             }
 
-            if ($request->getUri()->getAuthority() !== $originRequest->getUri()->getAuthority()) {
+            if ($request->getUri()->getScheme() !== $originRequest->getUri()->getScheme() || $request->getUri()->getAuthority() !== $originRequest->getUri()->getAuthority()) {
                 $request->removeHeader('authorization');
                 $request->removeHeader('cookie');
                 $request->removeHeader('host');

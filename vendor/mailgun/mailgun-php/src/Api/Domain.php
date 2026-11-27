@@ -126,6 +126,8 @@ class Domain extends HttpApi
     ) {
         Assert::stringNotEmpty($domain);
 
+        $params = [];
+
         $params['name'] = $domain;
 
         if (!empty($smtpPass)) {
@@ -514,7 +516,7 @@ class Domain extends HttpApi
     {
         Assert::stringNotEmpty($domain);
 
-        $response = $this->httpGet(sprintf('/v2/x509/%s}/status', $domain), []);
+        $response = $this->httpGet(sprintf('/v2/x509/%s/status', $domain), []);
 
         return $this->hydrateResponse($response, CertStatusResponse::class);
     }

@@ -47,9 +47,9 @@ use Psr\Http\Message\ResponseInterface;
 class Mailgun
 {
     /**
-     * @var string|null
+     * @var string
      */
-    private ?string $apiKey;
+    private string $apiKey;
 
     /**
      * @var ClientInterface|PluginClient
@@ -222,9 +222,9 @@ class Mailgun
     /**
      * @return Webhook
      */
-    public function webhooks(string $signingKey): Api\Webhook
+    public function webhooks(?string $signingKey = null): Api\Webhook
     {
-        return new Api\Webhook($this->httpClient, $this->requestBuilder, $this->hydrator, $signingKey);
+        return new Api\Webhook($this->httpClient, $this->requestBuilder, $this->hydrator, $signingKey ?? $this->apiKey);
     }
 
     /**

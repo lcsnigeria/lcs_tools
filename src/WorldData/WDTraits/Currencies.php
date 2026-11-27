@@ -16,7 +16,7 @@ trait Currencies
      *
      * @var string
      */
-    private static string $currencyDataFile = __DIR__ . '/../WDJson/Currencies.json';
+    private static string $currencyDataFile = __DIR__ . '/../WDDB/Currencies.json';
 
     /**
      * Retrieve currency data for a given ISO 3166-1 country code.

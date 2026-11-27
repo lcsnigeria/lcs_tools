@@ -1,5 +1,8 @@
 <?php
-namespace LCSNG\Tools\CurrencyConverter;
+namespace LCSNG\Tools\WorldData;
+
+use LCSNG\Tools\WorldData\WDFactories\CurrencyRateProviderFactory;
+use LCSNG\Tools\WorldData\WDInterfaces\CurrencyRateProviderInterface;
 
 /**
  * LCS Currency Converter
@@ -17,14 +20,14 @@ class LCS_CurrencyConverter
      * This determines which external currency exchange service will be used
      * to retrieve live rates. Expected values include:
      * - exchangerate-api
-     * - exchangerates-io
-     * - fasttools
      * - currencyapi
      * - fixer
      *
      * @var string
      */
     private string $apiProvider;
+
+    private CurrencyRateProviderInterface $rateProvider;
 
     /**
      * Optional API key for providers that require authentication.
@@ -94,27 +97,31 @@ class LCS_CurrencyConverter
      * Constructor
      *
      * @param array $config Configuration options:
-     *     - apiProvider (string): API provider name ('exchangerate-api', 'exchangerates-io', 'fasttools', 'currencyapi', 'fixer')
+     *     - apiProvider (string): API provider name ('exchangerate-api', 'currencyapi', 'fixer')
      *     - apiKey (string|null): API key for providers that require it
-     *     - cacheFile (string|null): Path to cache file (default: ./currency_cache.json)
+     *     - cacheFile (string|null): Path to cache file (default: provider/base-specific file in ./WDCache)
      *     - cacheExpiryTime (int): Cache validity in seconds (default: 3600)
      *     - baseCurrency (string): Base currency code (default: 'USD')
      *     - enableLogging (bool): Enable error/info logging (default: false)
-     *     - logFile (string|null): Path to log file (default: ./currency_converter.log)
+     *     - logFile (string|null): Path to log file (default: ./WDLogs/currency_converter.log)
      * 
-     * @throws \Exception If configuration is invalid
+     * @param CurrencyRateProviderInterface|null $rateProvider Optional provider override, useful for custom providers and testing.
+     * @throws \InvalidArgumentException If configuration is invalid.
+     * @throws \RuntimeException If the rate provider fails or returns invalid data.
      */
-    public function __construct(array $config)
+    public function __construct(array $config, ?CurrencyRateProviderInterface $rateProvider = null)
     {
         $this->validateConfig($config);
-        
-        $this->apiProvider     = $config['apiProvider'] ?? 'exchangerate-api';
+
+        $this->apiProvider     = strtolower(trim($config['apiProvider'] ?? 'exchangerate-api'));
         $this->apiKey          = $config['apiKey'] ?? null;
-        $this->cacheFile       = $config['cacheFile'] ?? __DIR__ . '/currency_cache.json';
-        $this->cacheExpiryTime = $config['cacheExpiryTime'] ?? 3600;
         $this->baseCurrency    = strtoupper($config['baseCurrency'] ?? 'USD');
+        $cacheIdentity         = preg_replace('/[^a-z0-9-]/', '', $this->apiProvider) . '_' . $this->baseCurrency;
+        $this->cacheFile       = $config['cacheFile'] ?? __DIR__ . '/WDCache/currency_cache_' . $cacheIdentity . '.json';
+        $this->cacheExpiryTime = $config['cacheExpiryTime'] ?? 3600;
         $this->enableLogging   = $config['enableLogging'] ?? false;
-        $this->logFile         = $config['logFile'] ?? __DIR__ . '/currency_converter.log';
+        $this->logFile         = $config['logFile'] ?? __DIR__ . '/WDLogs/currency_converter.log';
+        $this->rateProvider    = $rateProvider ?? CurrencyRateProviderFactory::create($this->apiProvider, $this->apiKey);
 
         $this->ensureCacheDirectory();
         $this->ratesData = $this->fetchRates();
@@ -128,24 +135,34 @@ class LCS_CurrencyConverter
      */
     private function validateConfig(array $config): void
     {
-        $supportedProviders = [
-            'exchangerate-api',
-            'exchangerates-io',
-            'fasttools',
-            'currencyapi',
-            'fixer'
-        ];
-
-        if (isset($config['apiProvider']) && !in_array($config['apiProvider'], $supportedProviders)) {
-            throw new \Exception("Unsupported API provider. Supported: " . implode(', ', $supportedProviders));
+        if (isset($config['apiProvider']) && (
+            !is_string($config['apiProvider'])
+            || !CurrencyRateProviderFactory::isSupported($config['apiProvider'])
+        )) {
+            throw new \InvalidArgumentException(
+                'Unsupported API provider. Supported: ' . implode(', ', CurrencyRateProviderFactory::SUPPORTED_PROVIDERS)
+            );
         }
 
         if (isset($config['cacheExpiryTime']) && (!is_int($config['cacheExpiryTime']) || $config['cacheExpiryTime'] < 0)) {
-            throw new \Exception("cacheExpiryTime must be a positive integer");
+            throw new \InvalidArgumentException("cacheExpiryTime must be a non-negative integer.");
         }
 
-        if (isset($config['baseCurrency']) && !preg_match('/^[A-Z]{3}$/', strtoupper($config['baseCurrency']))) {
-            throw new \Exception("baseCurrency must be a valid 3-letter ISO currency code");
+        if (isset($config['baseCurrency']) && (
+            !is_string($config['baseCurrency'])
+            || !preg_match('/^[A-Z]{3}$/', strtoupper($config['baseCurrency']))
+        )) {
+            throw new \InvalidArgumentException("baseCurrency must be a valid 3-letter ISO currency code.");
+        }
+
+        foreach (['apiKey', 'cacheFile', 'logFile'] as $stringField) {
+            if (isset($config[$stringField]) && !is_string($config[$stringField])) {
+                throw new \InvalidArgumentException("{$stringField} must be a string.");
+            }
+        }
+
+        if (isset($config['enableLogging']) && !is_bool($config['enableLogging'])) {
+            throw new \InvalidArgumentException('enableLogging must be a boolean.');
         }
     }
 
@@ -155,8 +172,8 @@ class LCS_CurrencyConverter
     private function ensureCacheDirectory(): void
     {
         $dir = dirname($this->cacheFile);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Unable to create currency cache directory: {$dir}");
         }
     }
 
@@ -184,55 +201,84 @@ class LCS_CurrencyConverter
      */
     private function fetchRates(): array
     {
-        if (file_exists($this->cacheFile)) {
-            try {
-                $cache = json_decode(file_get_contents($this->cacheFile), true);
-                
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    $this->log("Cache file corrupted, fetching fresh data", 'WARNING');
-                    return $this->refreshRates();
-                }
-
-                if (!empty($cache['timestamp']) && (time() - $cache['timestamp']) < $this->cacheExpiryTime) {
-                    $this->log("Using cached rates (age: " . (time() - $cache['timestamp']) . "s)");
-                    return $cache['data'];
-                }
-                
-                $this->log("Cache expired, fetching fresh data");
-            } catch (\Exception $e) {
-                $this->log("Error reading cache: " . $e->getMessage(), 'ERROR');
+        $cache = $this->readCache();
+        if ($cache !== null) {
+            $cacheAge = time() - $cache['timestamp'];
+            if ($cacheAge >= 0 && $cacheAge < $this->cacheExpiryTime) {
+                $this->log("Using cached rates (age: {$cacheAge}s)");
+                return $cache['data'];
             }
+
+            $this->log('Cache expired or has an invalid timestamp; fetching fresh data.', 'WARNING');
         }
 
         return $this->refreshRates();
+    }
+
+    private function readCache(): ?array
+    {
+        if (!is_file($this->cacheFile)) {
+            return null;
+        }
+
+        $contents = @file_get_contents($this->cacheFile);
+        if ($contents === false) {
+            $this->log('Unable to read currency cache; fetching fresh data.', 'WARNING');
+            return null;
+        }
+
+        try {
+            $cache = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            $this->log('Currency cache is invalid JSON; fetching fresh data.', 'WARNING');
+            return null;
+        }
+
+        if (
+            !is_array($cache)
+            || ($cache['provider'] ?? null) !== $this->apiProvider
+            || ($cache['requestedBaseCurrency'] ?? null) !== $this->baseCurrency
+            || !is_int($cache['timestamp'] ?? null)
+            || !is_array($cache['data'] ?? null)
+        ) {
+            $this->log('Currency cache does not match the configured provider/base currency.', 'WARNING');
+            return null;
+        }
+
+        try {
+            $this->validateRatesData($cache['data']);
+        } catch (\RuntimeException $e) {
+            $this->log('Currency cache contains invalid rates; fetching fresh data.', 'WARNING');
+            return null;
+        }
+
+        return $cache;
     }
 
     /**
      * Force refresh rates from API and update cache
      * 
      * @return array Updated rates data
-     * @throws \Exception If API request fails
+     * @throws \RuntimeException If the provider request fails or returns invalid data.
      */
     public function refreshRates(): array
     {
         $this->log("Refreshing rates from API provider: {$this->apiProvider}");
 
         try {
-            $data = match ($this->apiProvider) {
-                'exchangerate-api' => $this->fetchExchangeRateApi(),
-                'exchangerates-io' => $this->fetchExchangeRatesIo(),
-                'fasttools'        => $this->fetchFastToolsCurrency(),
-                'currencyapi'      => $this->fetchCurrencyApi(),
-                'fixer'            => $this->fetchFixer(),
-                default            => throw new \Exception("Unsupported API provider: {$this->apiProvider}")
-            };
-
+            $data = $this->rateProvider->fetchRates($this->baseCurrency);
             $this->validateRatesData($data);
 
-            file_put_contents($this->cacheFile, json_encode([
+            $cacheContents = json_encode([
+                'provider' => $this->apiProvider,
+                'requestedBaseCurrency' => $this->baseCurrency,
                 'timestamp' => time(),
                 'data' => $data
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+            if (@file_put_contents($this->cacheFile, $cacheContents, LOCK_EX) === false) {
+                $this->log('Unable to write currency cache; rates are available for this instance only.', 'WARNING');
+            }
 
             $this->ratesData = $data;
             $this->log("Successfully refreshed rates (" . count($data['rates']) . " currencies)");
@@ -253,11 +299,27 @@ class LCS_CurrencyConverter
     private function validateRatesData(array $data): void
     {
         if (empty($data['rates']) || !is_array($data['rates'])) {
-            throw new \Exception("Invalid rates data: missing or invalid 'rates' array");
+            throw new \RuntimeException("Invalid rates data: missing or invalid 'rates' array.");
         }
 
-        if (empty($data['base'])) {
-            throw new \Exception("Invalid rates data: missing 'base' currency");
+        if (!is_string($data['base'] ?? null) || !preg_match('/^[A-Z]{3}$/', $data['base'])) {
+            throw new \RuntimeException("Invalid rates data: missing or invalid 'base' currency.");
+        }
+
+        if (!is_string($data['date'] ?? null) || $data['date'] === '') {
+            throw new \RuntimeException("Invalid rates data: missing or invalid 'date'.");
+        }
+
+        foreach ($data['rates'] as $currency => $rate) {
+            if (
+                !is_string($currency)
+                || !preg_match('/^[A-Z]{3}$/', $currency)
+                || !is_numeric($rate)
+                || !is_finite((float) $rate)
+                || (float) $rate <= 0
+            ) {
+                throw new \RuntimeException("Invalid rates data: invalid exchange rate for {$currency}.");
+            }
         }
     }
 
@@ -368,12 +430,13 @@ class LCS_CurrencyConverter
      */
     public function getCacheAge(): ?int
     {
-        if (!file_exists($this->cacheFile)) {
+        $cache = $this->readCache();
+        if ($cache === null) {
             return null;
         }
 
-        $cache = json_decode(file_get_contents($this->cacheFile), true);
-        return isset($cache['timestamp']) ? time() - $cache['timestamp'] : null;
+        $age = time() - $cache['timestamp'];
+        return $age >= 0 ? $age : null;
     }
 
     /**
@@ -385,152 +448,5 @@ class LCS_CurrencyConverter
     {
         $age = $this->getCacheAge();
         return $age !== null && $age < $this->cacheExpiryTime;
-    }
-
-    // ==================== Provider-Specific Fetch Methods ====================
-
-    /**
-     * Fetch rates from ExchangeRate-API
-     * @link https://www.exchangerate-api.com/
-     */
-    private function fetchExchangeRateApi(): array
-    {
-        $key = $this->apiKey ?? throw new \Exception("API key required for ExchangeRate-API");
-        $url = "https://v6.exchangerate-api.com/v6/{$key}/latest/{$this->baseCurrency}";
-
-        $response = $this->makeHttpRequest($url);
-        $data = json_decode($response, true);
-
-        if (empty($data['conversion_rates'])) {
-            throw new \Exception("Invalid response from ExchangeRate-API");
-        }
-
-        return [
-            'base'  => $data['base_code'] ?? $this->baseCurrency,
-            'date'  => $data['time_last_update_utc'] ?? date('Y-m-d'),
-            'rates' => $data['conversion_rates']
-        ];
-    }
-
-    /**
-     * Fetch rates from ExchangeRates.io
-     * @link https://exchangerates.io/
-     */
-    private function fetchExchangeRatesIo(): array
-    {
-        $key = $this->apiKey ?? throw new \Exception("API key required for ExchangeRates.io");
-        $url = "https://api.exchangerates.io/latest?base={$this->baseCurrency}&access_key={$key}";
-
-        $response = $this->makeHttpRequest($url);
-        $data = json_decode($response, true);
-
-        if (!isset($data['rates'])) {
-            throw new \Exception("Invalid response from ExchangeRates.io");
-        }
-
-        return [
-            'base'  => $data['base'] ?? $this->baseCurrency,
-            'date'  => $data['date'] ?? date('Y-m-d'),
-            'rates' => $data['rates']
-        ];
-    }
-
-    /**
-     * Fetch rates from FastTools Currency API
-     * @link https://api.fasttools.io/
-     */
-    private function fetchFastToolsCurrency(): array
-    {
-        $url = "https://api.fasttools.io/currency/latest?base={$this->baseCurrency}";
-        
-        $response = $this->makeHttpRequest($url);
-        $data = json_decode($response, true);
-
-        if (!isset($data['rates'])) {
-            throw new \Exception("Invalid response from FastTools");
-        }
-
-        return [
-            'base'  => $data['base'] ?? $this->baseCurrency,
-            'date'  => $data['date'] ?? date('Y-m-d'),
-            'rates' => $data['rates']
-        ];
-    }
-
-    /**
-     * Fetch rates from CurrencyAPI
-     * @link https://currencyapi.com/
-     */
-    private function fetchCurrencyApi(): array
-    {
-        $key = $this->apiKey ?? throw new \Exception("API key required for CurrencyAPI");
-        $url = "https://api.currencyapi.com/v3/latest?apikey={$key}&base_currency={$this->baseCurrency}";
-
-        $response = $this->makeHttpRequest($url);
-        $data = json_decode($response, true);
-
-        if (empty($data['data'])) {
-            throw new \Exception("Invalid response from CurrencyAPI");
-        }
-
-        $rates = [];
-        foreach ($data['data'] as $code => $info) {
-            $rates[$code] = $info['value'] ?? 0;
-        }
-
-        return [
-            'base'  => $this->baseCurrency,
-            'date'  => date('Y-m-d'),
-            'rates' => $rates
-        ];
-    }
-
-    /**
-     * Fetch rates from Fixer.io
-     * @link https://fixer.io/
-     */
-    private function fetchFixer(): array
-    {
-        $key = $this->apiKey ?? throw new \Exception("API key required for Fixer");
-        $url = "http://data.fixer.io/api/latest?access_key={$key}&base={$this->baseCurrency}";
-
-        $response = $this->makeHttpRequest($url);
-        $data = json_decode($response, true);
-
-        if (empty($data['rates'])) {
-            throw new \Exception("Invalid response from Fixer");
-        }
-
-        return [
-            'base'  => $data['base'] ?? $this->baseCurrency,
-            'date'  => $data['date'] ?? date('Y-m-d'),
-            'rates' => $data['rates']
-        ];
-    }
-
-    /**
-     * Make HTTP request with error handling
-     * 
-     * @param string $url
-     * @return string Response body
-     * @throws \Exception
-     */
-    private function makeHttpRequest(string $url): string
-    {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 10,
-                'user_agent' => 'LCS_CurrencyConverter/1.0'
-            ]
-        ]);
-
-        $response = @file_get_contents($url, false, $context);
-        
-        if ($response === false) {
-            $error = error_get_last();
-            throw new \Exception("HTTP request failed: " . ($error['message'] ?? 'Unknown error'));
-        }
-
-        return $response;
     }
 }

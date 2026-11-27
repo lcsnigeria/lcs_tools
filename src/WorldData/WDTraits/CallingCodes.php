@@ -32,7 +32,7 @@ trait CallingCodes
      *
      * @var string
      */
-    private static string $callingCodeDataFile = __DIR__ . '/../WDJson/CallingCodes.json';
+    private static string $callingCodeDataFile = __DIR__ . '/../WDDB/CallingCodes.json';
 
     // -------------------------------------------------------------------------
     //  Primary look-up methods

@@ -775,7 +775,7 @@ class HtmlDumper extends CliDumper
             $this->line .= $cursor->depth >= $this->displayOptions['maxDepth'] ? ' <samp class=sf-dump-compact>' : ' <samp class=sf-dump-expanded>';
             $this->endValue($cursor);
             $this->line .= $this->indentPad;
-            $this->line .= \sprintf('<img src="data:%s;base64,%s" /></samp>', $cursor->attr['content-type'], base64_encode($cursor->attr['img-data']));
+            $this->line .= \sprintf('<img src="data:%s;base64,%s" /></samp>', esc($cursor->attr['content-type']), base64_encode($cursor->attr['img-data']));
             $this->endValue($cursor);
         } else {
             parent::dumpString($cursor, $str, $bin, $cut);
@@ -863,7 +863,7 @@ class HtmlDumper extends CliDumper
             $dumpClasses[] = 'sf-dump-ellipsization';
             $ellipsisClass = 'sf-dump-ellipsis';
             if (isset($attr['ellipsis-type'])) {
-                $ellipsisClass .= ' sf-dump-ellipsis-'.$attr['ellipsis-type'];
+                $ellipsisClass .= ' sf-dump-ellipsis-'.esc($attr['ellipsis-type']);
             }
             $label = esc(substr($value, -$attr['ellipsis']));
             $dumpTitle = $v."\n".$dumpTitle;
@@ -883,7 +883,7 @@ class HtmlDumper extends CliDumper
             1 === \count($dumpClasses) ? '' : '"',
             implode(' ', $dumpClasses),
             $dumpTitle ? ' title="'.$dumpTitle.'"' : '',
-            preg_replace_callback(static::$controlCharsRx, function ($c) use ($map) {
+            preg_replace_callback(static::$controlCharsRx, static function ($c) use ($map) {
                 $s = $b = '<span class="sf-dump-default';
                 $c = $c[$i = 0];
                 if ($ns = "\r" === $c[$i] || "\n" === $c[$i]) {
@@ -907,9 +907,7 @@ class HtmlDumper extends CliDumper
         );
 
         if (!($attr['binary'] ?? false)) {
-            $v = preg_replace_callback(static::$unicodeCharsRx, function ($c) {
-                return '<span class=sf-dump-default>\u{'.strtoupper(dechex(mb_ord($c[0]))).'}</span>';
-            }, $v);
+            $v = preg_replace_callback(static::$unicodeCharsRx, static fn ($c) => '<span class=sf-dump-default>\u{'.strtoupper(dechex(mb_ord($c[0]))).'}</span>', $v);
         }
 
         if (isset($attr['file']) && $href = $this->getSourceLink($attr['file'], $attr['line'] ?? 0)) {

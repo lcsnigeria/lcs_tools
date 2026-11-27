@@ -293,7 +293,7 @@ class LCS_FileManager {
      * @var array $uploadedFileNames
      * Stores the names of files that have been successfully uploaded.
      */
-    public $uploadedFileNames = [];
+    private $uploadedFileNames = [];
 
     /**
      * @var int $previous_time_limit

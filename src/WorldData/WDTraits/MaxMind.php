@@ -19,7 +19,7 @@ use GeoIp2\Database\Reader;
  * databases.
  *
  * The MaxMind MMDB files are expected to be located in the
- * `MaxMindConfigs` directory relative to this trait.
+ * `WDDB` directory relative to this trait.
  *
  * Example:
  * ```php
@@ -56,7 +56,7 @@ trait MaxMind
     public static function maxMindCountry(): Reader
     {
         return new Reader(
-            __DIR__ . '/../MaxMindConfigs/GeoLite2-Country.mmdb'
+            __DIR__ . '/../WDDB/GeoLite2-Country.mmdb'
         );
     }
 
@@ -76,7 +76,7 @@ trait MaxMind
     public static function maxMindCity(): Reader
     {
         return new Reader(
-            __DIR__ . '/../MaxMindConfigs/GeoLite2-City.mmdb'
+            __DIR__ . '/../WDDB/GeoLite2-City.mmdb'
         );
     }
 
@@ -96,7 +96,7 @@ trait MaxMind
     public static function maxMindAsn(): Reader
     {
         return new Reader(
-            __DIR__ . '/../MaxMindConfigs/GeoLite2-ASN.mmdb'
+            __DIR__ . '/../WDDB/GeoLite2-ASN.mmdb'
         );
     }
 }

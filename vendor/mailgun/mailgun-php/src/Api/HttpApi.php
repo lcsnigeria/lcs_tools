@@ -18,9 +18,11 @@ use Mailgun\Exception\UnknownErrorException;
 use Mailgun\HttpClient\RequestBuilder;
 use Mailgun\Hydrator\Hydrator;
 use Mailgun\Hydrator\NoopHydrator;
+use Mailgun\Message\Exceptions\RuntimeException;
 use Psr\Http\Client as Psr18;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Psr\Http\Client\RequestExceptionInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -60,13 +62,13 @@ abstract class HttpApi
     }
 
     /**
-     * @param class-string $class
+     * @param class-string $className
      *
      * @return mixed|ResponseInterface
      *
      * @throws Exception
      */
-    protected function hydrateResponse(ResponseInterface $response, string $class)
+    protected function hydrateResponse(ResponseInterface $response, string $className)
     {
         if (null === $this->hydrator) {
             return $response;
@@ -76,13 +78,13 @@ abstract class HttpApi
             $this->handleErrors($response);
         }
 
-        return $this->hydrator->hydrate($response, $class);
+        return $this->hydrator->hydrate($response, $className);
     }
 
     /**
      * Throw the correct exception for this error.
      *
-     * @throws Exception|UnknownErrorException
+     * @throws HttpClientException|UnknownErrorException
      */
     protected function handleErrors(ResponseInterface $response): void
     {
@@ -104,9 +106,11 @@ abstract class HttpApi
                 throw HttpClientException::payloadTooLarge($response);
             case 429:
                 throw HttpClientException::tooManyRequests($response);
-            case 500 <= $statusCode:
-                throw HttpServerException::serverError($statusCode);
             default:
+                if ($statusCode >= 500 && $statusCode < 600) {
+                    throw HttpServerException::serverError($statusCode);
+                }
+
                 throw new UnknownErrorException();
         }
     }
@@ -117,7 +121,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array                    $parameters     GET parameters
      * @param  array                    $requestHeaders Request Headers
-     * @throws ClientExceptionInterface|\JsonException
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpGet(string $path, array $parameters = [], array $requestHeaders = []): ResponseInterface
     {
@@ -142,7 +146,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array                    $parameters     POST parameters
      * @param  array                    $requestHeaders Request headers
-     * @throws ClientExceptionInterface|\JsonException
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpPost(string $path, array $parameters = [], array $requestHeaders = []): ResponseInterface
     {
@@ -159,7 +163,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array|string             $body           Request body
      * @param  array                    $requestHeaders Request headers
-     * @throws ClientExceptionInterface|\JsonException
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpPostRaw(string $path, $body, array $requestHeaders = []): ResponseInterface
     {
@@ -180,7 +184,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array                    $parameters     PUT parameters
      * @param  array                    $requestHeaders Request headers
-     * @throws ClientExceptionInterface|\JsonException
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpPut(string $path, array $parameters = [], array $requestHeaders = []): ResponseInterface
     {
@@ -201,7 +205,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array                    $parameters     PATCH parameters
      * @param  array                    $requestHeaders Request headers
-     * @throws ClientExceptionInterface|\JsonException
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpPatch(string $path, array $parameters = [], array $requestHeaders = []): ResponseInterface
     {
@@ -222,7 +226,7 @@ abstract class HttpApi
      * @param  string                   $path           Request path
      * @param  array                    $parameters     DELETE parameters
      * @param  array                    $requestHeaders Request headers
-     * @throws ClientExceptionInterface
+     * @throws RuntimeException|ClientExceptionInterface|RequestExceptionInterface|\JsonException
      */
     protected function httpDelete(string $path, array $parameters = [], array $requestHeaders = []): ResponseInterface
     {

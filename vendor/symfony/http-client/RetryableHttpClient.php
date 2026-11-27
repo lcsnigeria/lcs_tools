@@ -12,6 +12,8 @@
 namespace Symfony\Component\HttpClient;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpClient\Internal\ArrayBodyCaster;
+use Symfony\Component\HttpClient\Internal\HttpDateTrait;
 use Symfony\Component\HttpClient\Response\AsyncContext;
 use Symfony\Component\HttpClient\Response\AsyncResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
@@ -30,6 +32,7 @@ use Symfony\Contracts\Service\ResetInterface;
 class RetryableHttpClient implements HttpClientInterface, ResetInterface
 {
     use AsyncDecoratorTrait;
+    use HttpDateTrait;
 
     private RetryStrategyInterface $strategy;
     private array $baseUris = [];
@@ -49,16 +52,17 @@ class RetryableHttpClient implements HttpClientInterface, ResetInterface
 
     public function withOptions(array $options): static
     {
+        $clone = clone $this;
+
         if (\array_key_exists('base_uri', $options)) {
             if (\is_array($options['base_uri'])) {
-                $this->baseUris = $options['base_uri'];
+                $clone->baseUris = $options['base_uri'];
                 unset($options['base_uri']);
             } else {
-                $this->baseUris = [];
+                $clone->baseUris = [];
             }
         }
 
-        $clone = clone $this;
         $clone->maxRetries = (int) ($options['max_retries'] ?? $this->maxRetries);
         unset($options['max_retries']);
 
@@ -80,7 +84,9 @@ class RetryableHttpClient implements HttpClientInterface, ResetInterface
             return new AsyncResponse($this->client, $method, $url, $options);
         }
 
-        return new AsyncResponse($this->client, $method, $url, $options, function (ChunkInterface $chunk, AsyncContext $context) use ($method, $url, $options, $maxRetries, &$baseUris) {
+        $rewindBody = self::createBodyRewinder($options);
+
+        return new AsyncResponse($this->client, $method, $url, $options, function (ChunkInterface $chunk, AsyncContext $context) use ($method, $url, $options, $maxRetries, &$baseUris, $rewindBody) {
             static $retryCount = 0;
             static $content = '';
             static $firstChunk;
@@ -141,6 +147,12 @@ class RetryableHttpClient implements HttpClientInterface, ResetInterface
                 }
             }
 
+            if (!$rewindBody()) {
+                yield from $this->passthru($context, $firstChunk, $content, $chunk);
+
+                return;
+            }
+
             $context->getResponse()->cancel();
 
             $delay = $this->getDelayFromHeader($context->getHeaders()) ?? $this->strategy->getDelay($context, !$exception && $chunk->isLast() ? $content : null, $exception);
@@ -170,12 +182,67 @@ class RetryableHttpClient implements HttpClientInterface, ResetInterface
                 return (int) ($after * 1000);
             }
 
-            if (false !== $time = strtotime($after)) {
-                return max(0, $time - time()) * 1000;
+            if (null !== $time = self::parseHttpDate($after)) {
+                // on 32-bit PHP, a delay of more than 24 days doesn't fit in an integer of milliseconds
+                return min(max(0, $time - time()) * 1000, \PHP_INT_MAX);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Returns a closure that rewinds the streams of the body, or that returns false when the body was already read and cannot be sent again.
+     */
+    private static function createBodyRewinder(array &$options): \Closure
+    {
+        $body = $options['body'] ?? '';
+        $read = false;
+
+        if ($body instanceof \Generator) {
+            $options['body'] = static function () use ($body, &$read) {
+                $read = true;
+
+                yield from $body;
+            };
+        } elseif ($body instanceof \Closure && !(new \ReflectionFunction($body))->isGenerator()) {
+            $options['body'] = static function (int $size) use ($body, &$read) {
+                $read = true;
+
+                return $body($size);
+            };
+        }
+
+        $streams = [];
+        $collect = static function ($stream) use (&$streams): void {
+            $streams[] = [$stream, ftell($stream), stream_get_meta_data($stream)['seekable']];
+        };
+
+        if (\is_array($body)) {
+            ArrayBodyCaster::cast($body, $collect);
+        } elseif (\is_resource($body)) {
+            $collect($body);
+        }
+
+        return static function () use (&$read, $streams): bool {
+            if ($read) {
+                return false;
+            }
+
+            foreach ($streams as [$stream, $offset, $seekable]) {
+                if (false === $offset || !$seekable && ftell($stream) !== $offset) {
+                    return false;
+                }
+            }
+
+            foreach ($streams as [$stream, $offset, $seekable]) {
+                if ($seekable && 0 !== fseek($stream, $offset)) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
     }
 
     private function passthru(AsyncContext $context, ?ChunkInterface $firstChunk, string &$content, ChunkInterface $lastChunk): \Generator

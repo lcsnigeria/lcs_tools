@@ -14,6 +14,8 @@ namespace Symfony\Component\Console\ArgumentResolver\ValueResolver;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Reflection\ReflectionMember;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
+use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Input\InputInterface;
 
 /**
@@ -25,6 +27,8 @@ use Symfony\Component\Console\Input\InputInterface;
  */
 final class BuiltinTypeValueResolver implements ValueResolverInterface
 {
+    private const BUILTIN_TYPES = ['string', 'bool', 'int', 'float', 'array'];
+
     public function resolve(string $argumentName, InputInterface $input, ReflectionMember $member): iterable
     {
         if ($member->isVariadic()) {
@@ -32,15 +36,21 @@ final class BuiltinTypeValueResolver implements ValueResolverInterface
         }
 
         if ($argument = Argument::tryFrom($member->getMember())) {
-            if (is_subclass_of($argument->typeName, \BackedEnum::class)) {
+            if (!\in_array($argument->typeName, self::BUILTIN_TYPES, true)) {
                 return [];
             }
 
-            return [$input->getArgument($argument->name)];
+            $value = $input->getArgument($argument->name);
+
+            if (\is_string($value) && \in_array($argument->typeName, ['int', 'float'], true) && !is_numeric($value)) {
+                throw InvalidArgumentException::fromInvalidType($argument->name, $value, $argument->typeName);
+            }
+
+            return [$value];
         }
 
         if ($option = Option::tryFrom($member->getMember())) {
-            if (is_subclass_of($option->typeName, \BackedEnum::class)) {
+            if (!\in_array($option->typeName, self::BUILTIN_TYPES, true) && !\in_array($option->typeName, Option::ALLOWED_UNION_TYPES, true)) {
                 return [];
             }
 
@@ -58,8 +68,23 @@ final class BuiltinTypeValueResolver implements ValueResolverInterface
             return true;
         }
 
+        $expectedType = match ($option->typeName) {
+            'int', 'bool|int' => 'int',
+            'float', 'bool|float' => 'float',
+            default => null,
+        };
+
+        if (\is_string($value) && null !== $expectedType && !is_numeric($value)) {
+            throw InvalidOptionException::fromInvalidType($option->name, $value, $expectedType);
+        }
+
         if ('array' === $option->typeName && $option->allowNull && [] === $value) {
             return null;
+        }
+
+        // PHP converts a numeric string out of the int range to true for a bool|int parameter
+        if ('bool|int' === $option->typeName && \is_string($value) && is_numeric($value) && \is_float($number = $value + 0) && ($number >= \PHP_INT_MAX || $number < \PHP_INT_MIN)) {
+            throw InvalidOptionException::fromInvalidType($option->name, $value, 'int');
         }
 
         if ('bool' === $option->typeName) {

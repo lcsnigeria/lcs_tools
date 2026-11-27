@@ -25,6 +25,9 @@ use Symfony\Contracts\Service\ResetInterface;
 /**
  * Decorator that blocks requests to private networks by default.
  *
+ * Behind an HTTP proxy, the proxy resolves the hosts of the requests itself,
+ * so it must block private destinations on its own.
+ *
  * @author Hallison Boaventura <hallisonboaventura@gmail.com>
  * @author Nicolas Grekas <p@tchwork.com>
  */
@@ -34,10 +37,12 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
     use HttpClientTrait;
 
     private array $defaultOptions = self::OPTIONS_DEFAULTS;
+    private array $configuredOptions = [];
     private HttpClientInterface $client;
     private ?array $subnets;
     private int $ipFlags;
     private \ArrayObject $dnsCache;
+    private array $noAuthOptions = ['auth_basic' => null, 'auth_bearer' => null];
 
     /**
      * @param string|array|null $subnets String or array of subnets using CIDR notation that should be considered private.
@@ -64,15 +69,38 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
 
         $this->client = $client;
         $this->subnets = null !== $subnets ? (array) $subnets : null;
+
+        if (\FILTER_FLAG_IPV6 === $ipFlags) {
+            // Block IPv4-mapped addresses too, since they reach IPv4 hosts
+            $this->subnets[] = '::ffff:0:0/96';
+        }
+
         $this->ipFlags = $ipFlags;
         $this->dnsCache = new \ArrayObject();
+
+        try {
+            $client->withOptions(['auth_ntlm' => null]);
+            $this->noAuthOptions['auth_ntlm'] = null;
+        } catch (\InvalidArgumentException $e) {
+            // The decorated client doesn't support NTLM
+        }
     }
 
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
+        $givenOptions = $options;
         [$url, $options] = self::prepareRequest($method, $url, $options, $this->defaultOptions, true);
 
+        // Pass only the options given to this decorator and the ones it needs, so that the decorated client applies its default options to the others
+        $options = array_intersect_key($options, $givenOptions + $this->configuredOptions + ['headers' => true, 'normalized_headers' => true, 'body' => true, 'resolve' => true, 'max_redirects' => true]);
+
+        if (!isset(self::normalizeHeaders($givenOptions['headers'] ?? [])['accept'])) {
+            unset($options['normalized_headers']['accept']);
+            $options['headers'] = array_merge([], ...array_values($options['normalized_headers']));
+        }
+
         $redirectHeaders = parse_url($url['authority']);
+        $redirectHeaders['scheme'] = $url['scheme'];
         $host = $redirectHeaders['host'];
         $url = implode('', $url);
         $dnsCache = $this->dnsCache;
@@ -99,14 +127,19 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
             return new AsyncResponse($this->client, $method, $url, $options);
         }
 
+        // $url already contains the query: it must not be added again to redirect targets
+        unset($options['query']);
         $options['max_redirects'] = 0;
         $redirectHeaders['with_auth'] = $redirectHeaders['no_auth'] = $options['headers'];
+        $bodyOffset = \is_resource($options['body']) && stream_get_meta_data($options['body'])['seekable'] ? ftell($options['body']) : false;
 
         if (isset($options['normalized_headers']['host']) || isset($options['normalized_headers']['authorization']) || isset($options['normalized_headers']['cookie'])) {
             $redirectHeaders['no_auth'] = array_filter($redirectHeaders['no_auth'], static fn ($h) => 0 !== stripos($h, 'Host:') && 0 !== stripos($h, 'Authorization:') && 0 !== stripos($h, 'Cookie:'));
         }
 
-        return new AsyncResponse($this->client, $method, $url, $options, static function (ChunkInterface $chunk, AsyncContext $context) use (&$method, &$options, $maxRedirects, &$redirectHeaders, $subnets, $ipFlags, $dnsCache): \Generator {
+        $noAuthOptions = $this->noAuthOptions;
+
+        return new AsyncResponse($this->client, $method, $url, $options, static function (ChunkInterface $chunk, AsyncContext $context) use (&$method, &$options, $maxRedirects, &$redirectHeaders, $noAuthOptions, $subnets, $ipFlags, $dnsCache, $bodyOffset): \Generator {
             if (null !== $chunk->getError() || $chunk->isTimeout() || !$chunk->isFirst()) {
                 yield $chunk;
 
@@ -138,16 +171,23 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
                     $redirectHeaders['no_auth'] = array_filter($redirectHeaders['no_auth'], $filterContentHeaders);
                     $redirectHeaders['with_auth'] = array_filter($redirectHeaders['with_auth'], $filterContentHeaders);
                 }
+            } elseif (false !== $bodyOffset && isset($options['body'])) {
+                fseek($options['body'], $bodyOffset);
             }
 
-            // Authorization and Cookie headers MUST NOT follow except for the initial host name
+            // Authorization and Cookie headers MUST NOT follow except for the initial scheme, host and port
             $port = parse_url($url, \PHP_URL_PORT);
-            $options['headers'] = $redirectHeaders['host'] === $host && ($redirectHeaders['port'] ?? null) === $port ? $redirectHeaders['with_auth'] : $redirectHeaders['no_auth'];
+            $sameOrigin = parse_url($url, \PHP_URL_SCHEME).':' === $redirectHeaders['scheme'] && $redirectHeaders['host'] === $host && ($redirectHeaders['port'] ?? null) === $port;
+            $options['headers'] = $sameOrigin ? $redirectHeaders['with_auth'] : $redirectHeaders['no_auth'];
 
             static $redirectCount = 0;
             $context->setInfo('redirect_count', ++$redirectCount);
 
-            $context->replaceRequest($method, $url, $options);
+            // The decorated client must not add its default credentials either
+            $context->replaceRequest($method, $url, $sameOrigin ? $options : [
+                'headers' => $options['headers'] + ['Authorization' => [], 'Cookie' => []],
+                'extra' => ['skip_default_credentials' => true] + ($options['extra'] ?? []),
+            ] + $noAuthOptions + $options);
 
             if ($redirectCount >= $maxRedirects) {
                 $context->passthru();
@@ -172,6 +212,7 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
         $clone = clone $this;
         $clone->client = $this->client->withOptions($options);
         $clone->defaultOptions = self::mergeDefaultOptions($options, $this->defaultOptions);
+        $clone->configuredOptions = $options + $this->configuredOptions;
 
         return $clone;
     }
@@ -192,7 +233,7 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
         }
 
         if ($dnsCache->offsetExists($host)) {
-            return $dnsCache[$host];
+            return $options['resolve'][$host] = $dnsCache[$host];
         }
 
         if ((\FILTER_FLAG_IPV4 & $ipFlags) && $ip = gethostbynamel($host)) {
@@ -203,7 +244,7 @@ final class NoPrivateNetworkHttpClient implements HttpClientInterface, LoggerAwa
             return $host;
         }
 
-        if ($ip = dns_get_record($host, \DNS_AAAA)) {
+        if ($ip = @dns_get_record($host, \DNS_AAAA)) {
             $ip = $ip[0]['ipv6'];
         } elseif (\extension_loaded('sockets')) {
             if (!$info = socket_addrinfo_lookup($host, 0, ['ai_socktype' => \SOCK_STREAM, 'ai_family' => \AF_INET6])) {

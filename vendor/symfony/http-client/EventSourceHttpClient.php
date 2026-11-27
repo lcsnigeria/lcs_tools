@@ -16,6 +16,7 @@ use Symfony\Component\HttpClient\Chunk\ServerSentEvent;
 use Symfony\Component\HttpClient\Exception\EventSourceException;
 use Symfony\Component\HttpClient\Response\AsyncContext;
 use Symfony\Component\HttpClient\Response\AsyncResponse;
+use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Contracts\HttpClient\ChunkInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -57,6 +58,7 @@ final class EventSourceHttpClient implements HttpClientInterface, ResetInterface
             public ?string $lastEventId = null;
             public float $reconnectionTime;
             public ?float $lastError = null;
+            public bool $firstChunkSeen = false;
         };
         $state->reconnectionTime = $this->reconnectionTime;
 
@@ -87,7 +89,7 @@ final class EventSourceHttpClient implements HttpClientInterface, ResetInterface
             } catch (TransportExceptionInterface) {
                 $state->lastError = $lastError ?? hrtime(true) / 1E9;
 
-                if (null === $state->buffer || ($isTimeout && hrtime(true) / 1E9 - $state->lastError < $state->reconnectionTime)) {
+                if (null === $state->buffer || !\in_array($method, GenericRetryStrategy::IDEMPOTENT_METHODS, true) || ($isTimeout && hrtime(true) / 1E9 - $state->lastError < $state->reconnectionTime)) {
                     yield $chunk;
                 } else {
                     $options['headers']['Last-Event-ID'] = $state->lastEventId;
@@ -114,7 +116,10 @@ final class EventSourceHttpClient implements HttpClientInterface, ResetInterface
                     $context->passthru();
                 }
 
-                yield $chunk;
+                if (!$state->firstChunkSeen) {
+                    $state->firstChunkSeen = true;
+                    yield $chunk;
+                }
 
                 return;
             }

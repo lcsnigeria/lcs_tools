@@ -27,6 +27,7 @@ return array(
     '667aeda72477189d0494fecd327c3641' => $vendorDir . '/symfony/var-dumper/Resources/functions/dump.php',
     '7d8c19660fc7bda7e3f1bb627c20c455' => $vendorDir . '/yooper/stop-words/src/StopWordFactory.php',
     '0754989a10baadda533479884b399278' => $vendorDir . '/resend/resend-php/src/Resend.php',
+    'd92f49fe138fde4e7a3ec6f988960524' => $vendorDir . '/stripe/stripe-php/lib/version_check.php',
     '82b15671fa4352bd2c1ea8902d4c0c5d' => $vendorDir . '/yooper/php-text-analysis/src/helpers/storage.php',
     'c2fe535f6d51f069823351f60bd6b280' => $vendorDir . '/yooper/php-text-analysis/src/helpers/print.php',
     '34faac671c44560451a381662d8b697c' => $vendorDir . '/yooper/php-text-analysis/src/helpers/simplified.php',

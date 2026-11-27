@@ -1106,6 +1106,7 @@ class LCS_DBManager
                     $this->transactionDepth--;
                 } else {
                     $this->connection->commit();
+                    $this->inTransaction = false;
                 }
             } else {
                 if (!empty($this->transactionDepth)) {
@@ -1142,6 +1143,7 @@ class LCS_DBManager
                     $this->transactionDepth--;
                 } else {
                     $this->connection->rollBack();
+                    $this->inTransaction = false;
                 }
             } else {
                 if (!empty($this->transactionDepth)) {
@@ -1164,7 +1166,7 @@ class LCS_DBManager
      *
      * @return bool True if a transaction is active, false otherwise.
      */
-    private function isInTransaction(): bool
+    public function isInTransaction(): bool
     {
         if ($this->is_pdo_manager()) {
             // For PDO, use PDO::inTransaction() directly
@@ -2161,7 +2163,12 @@ class LCS_DBManager
                         AND id = OBJECT_ID(?)";
                 break;
             default:
+                $sql = null;
                 $this->reportError("Unsupported database type: " . $dbType);
+        }
+
+        if (empty($sql)) {
+            throw new \InvalidArgumentException('SQL cannot be empty. Try resolving defined database type.');
         }
 
         // Execute for all non-SQLite databases

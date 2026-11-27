@@ -378,10 +378,15 @@ class SymfonyStyle extends OutputStyle
             if ($this->output instanceof ConsoleSectionOutput) {
                 // add the new line of the `return` to submit the input to ConsoleSectionOutput, because ConsoleSectionOutput is holding all it's lines.
                 // this is relevant when a `ConsoleSectionOutput::clear` is called.
+                // the section already renders the prompt as a whole line, so an extra
+                // newLine() here would leave a doubled blank line below the answer; only
+                // keep the buffer in sync so autoPrependBlock() spaces the next block.
                 $this->output->addNewLineOfInputSubmit();
+                $this->bufferedOutput->write("\n\n");
+            } else {
+                $this->newLine();
+                $this->bufferedOutput->write("\n");
             }
-            $this->newLine();
-            $this->bufferedOutput->write("\n");
         }
 
         return $answer;
@@ -543,7 +548,7 @@ class SymfonyStyle extends OutputStyle
                 : str_repeat(' ', $paddingLength);
 
             if ($style) {
-                $line = \sprintf('<%s>%s</>', $style, $line);
+                $line = \sprintf('<%s>%s</>', $style, OutputFormatter::escapeTrailingBackslash($line));
             }
         }
 
@@ -589,7 +594,7 @@ class SymfonyStyle extends OutputStyle
         foreach ($lines as $line) {
             $lineContentWidth = Helper::width(Helper::removeDecoration($this->getFormatter(), $line));
             $padded = $line.str_repeat(' ', max($contentWidth - $lineContentWidth, 0));
-            $result[] = $style ? \sprintf('<%s> │ </>%s<%1$s> │</>', $style, $padded) : ' │ '.$padded.' │';
+            $result[] = $style ? \sprintf('<%s> │ </>%s<%1$s> │</>', $style, OutputFormatter::escapeTrailingBackslash($padded)) : ' │ '.$padded.' │';
         }
 
         $borderDashes = str_repeat('─', max(0, $this->lineLength - 3));

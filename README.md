@@ -1,1 +1,2 @@
-# lcs_ext_library
+# lcs_tools
+Documentation is underdevelopment

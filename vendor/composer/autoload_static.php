@@ -28,6 +28,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         '667aeda72477189d0494fecd327c3641' => __DIR__ . '/..' . '/symfony/var-dumper/Resources/functions/dump.php',
         '7d8c19660fc7bda7e3f1bb627c20c455' => __DIR__ . '/..' . '/yooper/stop-words/src/StopWordFactory.php',
         '0754989a10baadda533479884b399278' => __DIR__ . '/..' . '/resend/resend-php/src/Resend.php',
+        'd92f49fe138fde4e7a3ec6f988960524' => __DIR__ . '/..' . '/stripe/stripe-php/lib/version_check.php',
         '82b15671fa4352bd2c1ea8902d4c0c5d' => __DIR__ . '/..' . '/yooper/php-text-analysis/src/helpers/storage.php',
         'c2fe535f6d51f069823351f60bd6b280' => __DIR__ . '/..' . '/yooper/php-text-analysis/src/helpers/print.php',
         '34faac671c44560451a381662d8b697c' => __DIR__ . '/..' . '/yooper/php-text-analysis/src/helpers/simplified.php',
@@ -45,6 +46,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'chillerlan\\Settings\\' => 20,
             'chillerlan\\QRCode\\' => 18,
         ),
+        'a' =>
+        array (
+            'apimatic\\jsonmapper\\' => 20,
+        ),
         'Y' =>
         array (
             'Yooper\\' => 7,
@@ -53,6 +58,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             'Webmozart\\Assert\\' => 17,
             'Wamania\\Snowball\\' => 17,
+        ),
+        'U' =>
+        array (
+            'Unirest\\' => 8,
         ),
         'T' =>
         array (
@@ -78,11 +87,13 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'Symfony\\Component\\OptionsResolver\\' => 34,
             'Symfony\\Component\\Mime\\' => 23,
             'Symfony\\Component\\Mailer\\' => 25,
+            'Symfony\\Component\\HttpFoundation\\' => 33,
             'Symfony\\Component\\HttpClient\\' => 29,
             'Symfony\\Component\\Filesystem\\' => 29,
             'Symfony\\Component\\EventDispatcher\\' => 34,
             'Symfony\\Component\\ErrorHandler\\' => 31,
             'Symfony\\Component\\Console\\' => 26,
+            'Stripe\\' => 7,
             'SpomkyLabs\\Pki\\' => 15,
             'SourceSpan\\' => 11,
             'ScssPhp\\ScssPhp\\' => 16,
@@ -100,6 +111,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
             'Psr\\Container\\' => 14,
             'Psr\\Clock\\' => 10,
             'PhpOption\\' => 10,
+            'PaypalServerSdkLib\\' => 19,
             'ParagonIE\\ConstantTime\\' => 23,
             'PHPMailer\\PHPMailer\\' => 20,
         ),
@@ -160,6 +172,8 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         ),
         'C' =>
         array (
+            'Core\\' => 5,
+            'CoreInterfaces\\' => 15,
             'Composer\\CaBundle\\' => 18,
             'Clue\\StreamFilter\\' => 18,
         ),
@@ -185,6 +199,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/chillerlan/php-qrcode/src',
         ),
+        'apimatic\\jsonmapper\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/apimatic/jsonmapper/src',
+        ),
         'Yooper\\' =>
         array (
             0 => __DIR__ . '/..' . '/yooper/nicknames/src',
@@ -196,6 +214,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'Wamania\\Snowball\\' =>
         array (
             0 => __DIR__ . '/..' . '/wamania/php-stemmer/src',
+        ),
+        'Unirest\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/apimatic/unirest-php/src',
         ),
         'TextAnalysis\\' =>
         array (
@@ -273,6 +295,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/symfony/mailer',
         ),
+        'Symfony\\Component\\HttpFoundation\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/symfony/http-foundation',
+        ),
         'Symfony\\Component\\HttpClient\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/http-client',
@@ -292,6 +318,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'Symfony\\Component\\Console\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/console',
+        ),
+        'Stripe\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/stripe/stripe-php/lib',
         ),
         'SpomkyLabs\\Pki\\' =>
         array (
@@ -337,6 +367,10 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'PhpOption\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpoption/phpoption/src/PhpOption',
+        ),
+        'PaypalServerSdkLib\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/paypal/paypal-server-sdk/src',
         ),
         'ParagonIE\\ConstantTime\\' =>
         array (
@@ -459,6 +493,14 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         array (
             0 => __DIR__ . '/..' . '/dasprid/enum/src',
         ),
+        'Core\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/apimatic/core/src',
+        ),
+        'CoreInterfaces\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/apimatic/core-interfaces/src',
+        ),
         'Composer\\CaBundle\\' =>
         array (
             0 => __DIR__ . '/..' . '/composer/ca-bundle/src',
@@ -478,6 +520,16 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         'BaconQrCode\\' =>
         array (
             0 => __DIR__ . '/..' . '/bacon/bacon-qr-code/src',
+        ),
+    );
+
+    public static $prefixesPsr0 = array (
+        'R' =>
+        array (
+            'Rs\\Json' =>
+            array (
+                0 => __DIR__ . '/..' . '/php-jsonpointer/php-jsonpointer/src',
+            ),
         ),
     );
 
@@ -520,6 +572,7 @@ class ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382
         return \Closure::bind(function () use ($loader) {
             $loader->prefixLengthsPsr4 = ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382::$prefixLengthsPsr4;
             $loader->prefixDirsPsr4 = ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382::$prefixesPsr0;
             $loader->classMap = ComposerStaticInitb3f326f1bed2e65dd6de0121f9057382::$classMap;
 
         }, null, ClassLoader::class);

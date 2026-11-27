@@ -37,7 +37,7 @@ class TextDescriptor extends Descriptor
         }
 
         $totalWidth = $options['total_width'] ?? Helper::width($argument->getName());
-        $spacingWidth = $totalWidth - \strlen($argument->getName());
+        $spacingWidth = $totalWidth - Helper::width($argument->getName());
 
         $this->writeText(\sprintf('  <info>%s</info>  %s%s%s',
             $argument->getName(),
@@ -67,7 +67,7 @@ class TextDescriptor extends Descriptor
 
         $totalWidth = $options['total_width'] ?? $this->calculateTotalWidthForOptions([$option]);
         $synopsis = \sprintf('%s%s',
-            $option->getShortcut() ? \sprintf('-%s, ', $option->getShortcut()) : '    ',
+            null !== $option->getShortcut() ? \sprintf('-%s, ', $option->getShortcut()) : '    ',
             \sprintf($option->isNegatable() ? '--%1$s|--no-%1$s' : '--%1$s%2$s', $option->getName(), $value)
         );
 

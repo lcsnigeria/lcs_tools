@@ -1,0 +1,26 @@
+# Composer dependencies and lock file
+/vendor/
+composer.lock
+
+# Testing and static analysis caches
+.phpunit.result.cache
+.phpunit.cache/
+.phpstan/
+.psalm/
+/coverage/
+/build/
+
+# Environment files
+.env
+/src/Creds/.env
+
+# IDE and Editor files
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db

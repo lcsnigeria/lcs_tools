@@ -137,7 +137,7 @@ class TextPart extends AbstractPart
             rewind($this->body);
         }
 
-        return stream_get_contents($this->body) ?: '';
+        return (string) stream_get_contents($this->body);
     }
 
     public function bodyToString(): string
@@ -172,14 +172,14 @@ class TextPart extends AbstractPart
         if ($this->charset) {
             $headers->setHeaderParameter('Content-Type', 'charset', $this->charset);
         }
-        if ($this->name && 'form-data' !== $this->disposition) {
+        if (isset($this->name[0]) && 'form-data' !== $this->disposition) {
             $headers->setHeaderParameter('Content-Type', 'name', $this->name);
         }
         $headers->setHeaderBody('Text', 'Content-Transfer-Encoding', $this->encoding);
 
         if (!$headers->has('Content-Disposition') && null !== $this->disposition) {
             $headers->setHeaderBody('Parameterized', 'Content-Disposition', $this->disposition);
-            if ($this->name) {
+            if (isset($this->name[0])) {
                 $headers->setHeaderParameter('Content-Disposition', 'name', $this->name);
             }
         }
@@ -256,8 +256,10 @@ class TextPart extends AbstractPart
 
     public function __unserialize(array $data): void
     {
-        foreach (['charset', 'subtype', 'disposition', 'name', 'encoding'] as $prop) {
-            if (($data[$prop] ?? $data["\0".self::class."\0".$prop] ?? $data["\0*\0".$prop] ?? null) instanceof \Stringable) {
+        foreach (['charset' => true, 'subtype' => false, 'disposition' => true, 'name' => true, 'encoding' => false] as $prop => $nullable) {
+            $value = $data[$prop] ?? $data["\0".self::class."\0".$prop] ?? $data["\0*\0".$prop] ?? null;
+
+            if (!\is_string($value) && (!$nullable || null !== $value)) {
                 throw new \BadMethodCallException('Cannot unserialize '.__CLASS__);
             }
         }
